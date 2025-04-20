@@ -1,7 +1,12 @@
+#![allow(dead_code, unused_variables)]
+mod version;
 mod app;
 mod vanilla;
 mod mem;
 mod fabric;
+mod util;
+mod rules;
+mod assets;
 
 use clap::Parser;
 
