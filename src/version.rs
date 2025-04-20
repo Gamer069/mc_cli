@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use serde::Deserialize;
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct Arguments {
     pub game: Vec<GameArgument>,
     pub jvm: Vec<JvmArgument>,
@@ -26,29 +26,37 @@ pub struct LibraryDownload {
 #[derive(Deserialize, Debug)]
 pub struct Downloads {
     pub client: Download,
-    pub client_mappings: Download,
+    pub client_mappings: Option<Download>,
     pub server: Download,
-    pub server_mappings: Download,
+    pub server_mappings: Option<Download>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct LibraryClassifiers {
+    pub natives_windows_64: Option<LibraryDownload>,
+    pub natives_windows_32: Option<LibraryDownload>,
+    pub natives_windows: Option<LibraryDownload>,
+    pub natives_osx: Option<LibraryDownload>,
+    pub natives_osx_64: Option<LibraryDownload>,
+    pub natives_osx_32: Option<LibraryDownload>,
+    pub natives_linux: Option<LibraryDownload>,
+    pub natives_linux_32: Option<LibraryDownload>,
+    pub natives_linux_64: Option<LibraryDownload>,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct LibraryDownloads {
-    pub artifact: LibraryDownload,
+    pub artifact: Option<LibraryDownload>,
+    pub classifiers: Option<LibraryClassifiers>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum Os {
     Name { name: String },
     Arch { arch: String},
     Both { name: String, arch: String },
     // pub name: String,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct OsRule {
-    pub action: String,
-    pub os: Os,
 }
 
 #[derive(Deserialize, Debug)]
@@ -66,14 +74,15 @@ pub struct AssetIndex {
 pub struct Library {
     pub downloads: LibraryDownloads,
     pub name: String,
-    pub rules: Option<Vec<OsRule>>,
+    pub rules: Option<Vec<Rule>>,
 }
 
 #[derive(Deserialize, Debug)]
 // because serde doesn't wanna rename it for me!
 #[allow(non_snake_case)]
 pub struct VersionJson {
-    pub arguments: Arguments,
+    pub arguments: Option<Arguments>,
+    pub minecraftArguments: Option<String>,
     pub downloads: Downloads,
     pub libraries: Vec<Library>,
     pub mainClass: String,
@@ -81,39 +90,40 @@ pub struct VersionJson {
     pub assetIndex: AssetIndex,
 }
 
-#[derive(Deserialize, Debug)]
-pub struct ArgRuleFeatures(pub HashMap<String, bool>);
+#[derive(Deserialize, Debug, Clone)]
+pub struct RuleFeatures(pub HashMap<String, bool>);
 
-#[derive(Deserialize, Debug)]
-pub struct ArgRule {
+#[derive(Deserialize, Debug, Clone)]
+pub struct Rule {
     pub action: String,
-    pub features: ArgRuleFeatures,
+    pub features: Option<RuleFeatures>,
+    pub os: Option<Os>
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum GameArgumentValue {
     String(String),
     Strings(Vec<String>),
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum JvmArgumentValue {
     String(String),
     Strings(Vec<String>),
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum JvmArgument {
     String(String),
-    ArgWithRule { rules: Vec<OsRule>, value: JvmArgumentValue },
+    ArgWithRule { rules: Vec<Rule>, value: JvmArgumentValue },
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum GameArgument {
     String(String),
-    ArgWithRule { rules: Vec<ArgRule>, value: GameArgumentValue },
+    ArgWithRule { rules: Vec<Rule>, value: GameArgumentValue },
 }

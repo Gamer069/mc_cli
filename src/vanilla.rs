@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs, io::{BufRead, BufReader}, path::{Path, PathBuf}, process::{Command, Stdio}};
+use std::{borrow, clone, collections::HashMap, fs, io::{BufRead, BufReader}, path::{Path, PathBuf}, process::{Command, Stdio}};
 
 use directories::ProjectDirs;
 use serde::Deserialize;
@@ -84,26 +84,37 @@ pub fn launch(json: VersionJson, version_dir: PathBuf, limit: String) {
     let mut jvm_args: Vec<String> = vec![];
     jvm_args.push(format!("-Xmx{}", limit));
     // DONT MIND THIS CODE. I KNOW IT'S TERRIBLE
-    for arg in json.arguments.jvm {
-        match arg {
-            version::JvmArgument::String(arg) => jvm_args.push(arg),
-            version::JvmArgument::ArgWithRule { rules, value } => {
-                for rule in rules {
-                    if rules::matches_os_rule(&rule) {
-                        match value {
-                            version::JvmArgumentValue::String(ref val) => {
-                                jvm_args.push(val.clone());
-                            },
-                            version::JvmArgumentValue::Strings(ref vals) => {
-                                for val in vals {
+    if let Some(arguments) = json.arguments.clone() {
+        for arg in arguments.jvm {
+            match arg {
+                version::JvmArgument::String(arg) => jvm_args.push(arg),
+                version::JvmArgument::ArgWithRule { rules, value } => {
+                    for rule in rules {
+                        if rules::matches_os_rule(&rule) {
+                            match value {
+                                version::JvmArgumentValue::String(ref val) => {
                                     jvm_args.push(val.clone());
-                                }
-                            },
+                                },
+                                version::JvmArgumentValue::Strings(ref vals) => {
+                                    for val in vals {
+                                        jvm_args.push(val.clone());
+                                    }
+                                },
+                            }
                         }
                     }
-                }
-            },
+                },
+            }
         }
+    } else {
+        jvm_args.push("-Djava.library.path=${natives_directory}".to_owned());
+        jvm_args.push("-Djna.tmpdir=${natives_directory}".to_owned());
+        jvm_args.push("-Dorg.lwjgl.system.SharedLibraryExtractPath=${natives_directory}".to_owned());
+        jvm_args.push("-Dio.netty.native.workdir=${natives_directory}".to_owned());
+        jvm_args.push("-Dminecraft.launcher.brand=${launcher_name}".to_owned());
+        jvm_args.push("-Dminecraft.launcher.version=${launcher_version}".to_owned());
+        jvm_args.push("-cp".to_owned());
+        jvm_args.push("${classpath}".to_owned());
     }
     let jvm_args_str = jvm_args.join(" ")
         .replace("${natives_directory}", &libs.to_string_lossy().clone())
@@ -121,25 +132,34 @@ pub fn launch(json: VersionJson, version_dir: PathBuf, limit: String) {
     features.insert("is_quick_play_multiplayer".to_owned(), false);
     features.insert("is_quick_play_realms".to_owned(), false);
 
-    for arg in json.arguments.game {
-        match arg {
-            version::GameArgument::String(arg) => game_args.push(arg),
-            version::GameArgument::ArgWithRule { rules, value } => {
-                for rule in rules {
-                    if rules::matches_arg_rule(features.clone(), &rule) {
-                        match value {
-                            version::GameArgumentValue::String(ref val) => {
-                                game_args.push(val.clone());
-                            },
-                            version::GameArgumentValue::Strings(ref vals) => {
-                                for val in vals {
+    if let Some(arguments) = json.arguments.clone() {
+        for arg in json.arguments.unwrap().game {
+            match arg {
+                version::GameArgument::String(arg) => game_args.push(arg),
+                version::GameArgument::ArgWithRule { rules, value } => {
+                    for rule in rules {
+                        if rules::matches_arg_rule(features.clone(), &rule) {
+                            match value {
+                                version::GameArgumentValue::String(ref val) => {
                                     game_args.push(val.clone());
-                                }
-                            },
+                                },
+                                version::GameArgumentValue::Strings(ref vals) => {
+                                    for val in vals {
+                                        game_args.push(val.clone());
+                                    }
+                                },
+                            }
                         }
                     }
-                }
-            },
+                },
+            }
+        }
+    } else {
+        if let Some(minecraft_arguments) = json.minecraftArguments.clone() {
+            let args = minecraft_arguments.split(" ").collect::<Vec<_>>();
+            for arg in args {
+                game_args.push(arg.to_owned());
+            }
         }
     }
     let game_args_str = game_args
@@ -161,8 +181,6 @@ pub fn launch(json: VersionJson, version_dir: PathBuf, limit: String) {
         .replace("${assets_index_name}", &version_dir.file_name().unwrap().to_string_lossy())
         .replace("${assets_root}", assets_dir.to_str().unwrap());
 
-    println!("game args: {}", game_args_str);
-
     let mut cmd: Vec<String> = vec![];
 
     for jvm_arg in jvm_args_str.split(" ") {
@@ -174,6 +192,8 @@ pub fn launch(json: VersionJson, version_dir: PathBuf, limit: String) {
     for game_arg in game_args_str.split(" ") {
         cmd.push(game_arg.to_owned());
     }
+
+    println!("cmd: {:?}", cmd);
 
     let mut cmd = Command::new("java")
         .args(cmd)
@@ -247,24 +267,41 @@ pub fn handle(opt_version: Option<String>, limit: String) {
     for lib in &version_json.libraries {
         if let Some(rules) = &lib.rules {
             for rule in rules {
-                let matches_rule = rules::matches_os_rule(rule);
-                if matches_rule {
-                    let path = Path::new(&lib.downloads.artifact.path);
-                    let _ = fs::create_dir_all(libs.join(path.parent().unwrap()));
-                    let _ = util::download(lib.downloads.artifact.url.as_str(), &libs.as_path().join(path), "Downloaded lib".to_owned()).expect("Failed to download library");
+                if let Some(artifact) = &lib.downloads.artifact {
+                    let matches_rule = rules::matches_os_rule(rule);
+                    if matches_rule {
+                        let path = Path::new(&artifact.path);
+                        let _ = fs::create_dir_all(libs.join(path.parent().unwrap()));
+                        let _ = util::download(artifact.url.as_str(), &libs.as_path().join(path), "Downloaded lib".to_owned()).expect("Failed to download library");
+                    }
                 }
             }
         } else {
-            let path = Path::new(&lib.downloads.artifact.path);
-            let _ = fs::create_dir_all(libs.join(path.parent().unwrap()));
-            let _ = util::download(lib.downloads.artifact.url.as_str(), &libs.as_path().join(path), "Downloaded lib".to_owned()).expect("Failed to download library");
+            if let Some(artifact) = &lib.downloads.artifact {
+                let path = Path::new(&artifact.path);
+                let _ = fs::create_dir_all(libs.join(path.parent().unwrap()));
+                let _ = util::download(artifact.url.as_str(), &libs.as_path().join(path), "Downloaded lib".to_owned()).expect("Failed to download library");
+            }
+            if let Some(classifiers) = &lib.downloads.classifiers {
+                let needed = rules::classifiers_needed(classifiers);
+
+                println!("asdf needed: {:?}", &needed);
+
+                for needed in needed {
+                    println!("asdf url: {}", &needed.url);
+                    let url = &needed.url;
+                    let path = Path::new(&needed.path);
+                    let _ = fs::create_dir_all(libs.join(path.parent().unwrap()));
+                    let _ = util::download(needed.url.as_str(), &libs.as_path().join(path), "Downloaded classifier lib".to_owned()).expect("Failed to download classifier lib");
+                }
+            }
         }
     }
     let assets_dir = data_dir.join("assets");
     let _ = fs::create_dir(assets_dir.join("indexes"));
 
     let asset_index_url = version_json.assetIndex.url.clone();
-    let asset_index = util::download_text(&asset_index_url, &assets_dir.join("indexes").join(format!("{}.json", version_json.assetIndex.id)), "Downloaded asset index".to_owned()).expect("Failed to download asset index json");
+    let asset_index = util::download_text(&asset_index_url, &assets_dir.join("indexes").join(format!("{}.json", version)), "Downloaded asset index".to_owned()).expect("Failed to download asset index json");
 
     let asset_index_json: AssetIndexJson = serde_json::from_str(&asset_index).expect("Failed to parse asset index json");
     let assets = asset_index_json.objects;

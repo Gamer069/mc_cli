@@ -9,7 +9,7 @@ pub fn download_text(url: &str, out: &Path, msg: String) -> Result<String, Box<d
     let total = resp.content_length().unwrap_or(0);
     let pb = ProgressBar::new(total);
     pb.set_style(ProgressStyle::default_bar()
-        .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})")
+        .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta}) {cmd}")
         .unwrap()
         .progress_chars("#>-"));
 

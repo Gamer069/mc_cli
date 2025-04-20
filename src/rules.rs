@@ -1,10 +1,14 @@
 use std::collections::HashMap;
 
-use crate::version::{ArgRule, OsRule};
+use crate::version::{LibraryClassifiers, LibraryDownload, Rule};
 
-pub fn matches_os_rule(rule: &OsRule) -> bool {
+pub fn matches_os_rule(rule: &Rule) -> bool {
     let mut matches_rule: bool = false;
-    match &rule.os {
+    let os = &rule.os;
+    if os.is_none() {
+        return true;
+    }
+    match os.clone().unwrap().clone() {
         crate::version::Os::Name { name } => {
             let os = rust_os_to_minecraft_os();
             if name == os {
@@ -31,9 +35,67 @@ pub fn matches_os_rule(rule: &OsRule) -> bool {
     return matches_rule && rule.action == "allow";
 }
 
-pub fn matches_arg_rule(features: HashMap<String, bool>, rule: &ArgRule) -> bool {
-    let matches_rule: bool = hashmap_contains::<String, bool>(&features, &rule.features.0);
+pub fn matches_arg_rule(features: HashMap<String, bool>, rule: &Rule) -> bool {
+    if rule.features.is_none() {
+        return true;
+    }
+    let matches_rule: bool = hashmap_contains::<String, bool>(&features, &rule.features.clone().unwrap().0);
     return matches_rule && rule.action == "allow";
+}
+
+pub fn classifiers_needed(classifiers: &LibraryClassifiers) -> Vec<&LibraryDownload> {
+    let mut downloads = vec![];
+
+    let arch = std::env::consts::ARCH; // This is better than target_pointer_width.
+
+    match std::env::consts::OS {
+        "macos" => {
+            if let Some(download) = &classifiers.natives_osx {
+                downloads.push(download);
+            }
+            if let Some(download) = &classifiers.natives_osx_64 {
+                downloads.push(download);
+            }
+            if let Some(download) = &classifiers.natives_osx_32 {
+                downloads.push(download);
+            }
+        }
+        "windows" => {
+            if arch == "x86_64" {
+                if let Some(download) = &classifiers.natives_windows_64 {
+                    downloads.push(download);
+                }
+            } else if arch == "x86" {
+                if let Some(download) = &classifiers.natives_windows_32 {
+                    downloads.push(download);
+                }
+            }
+
+            if let Some(download) = &classifiers.natives_windows {
+                downloads.push(download);
+            }
+        }
+        "linux" => {
+            if arch == "x86_64" {
+                if let Some(download) = &classifiers.natives_linux_64 {
+                    downloads.push(download);
+                }
+            } else if arch == "x86" {
+                if let Some(download) = &classifiers.natives_linux_32 {
+                    downloads.push(download);
+                }
+            }
+
+            if let Some(download) = &classifiers.natives_linux {
+                downloads.push(download);
+            }
+        }
+        _ => {}
+    }
+    println!("Downloads: {:?}", downloads);
+    println!("classifiers: {:?}", classifiers);
+
+    downloads
 }
 
 pub fn hashmap_contains<K: Eq + std::hash::Hash, V: PartialEq>(
