@@ -21,7 +21,7 @@ pub fn can_use(mem: String) -> bool {
     };
 
     // Return the value in bytes (convert from the number with the appropriate multiplier)
-    return ((number * multiplier as f64) as u64) < sys_info::mem_info().unwrap().avail
+    ((number * multiplier as f64) as u64) < sys_info::mem_info().unwrap().avail
 }
 pub fn check_if_valid(limit: String) {
     if !is_valid(limit.clone()) {
