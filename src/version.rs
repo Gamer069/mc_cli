@@ -32,6 +32,7 @@ pub struct Downloads {
 }
 
 #[derive(Deserialize, Debug)]
+#[serde(rename_all = "kebab-case")]
 pub struct LibraryClassifiers {
     pub natives_windows_64: Option<LibraryDownload>,
     pub natives_windows_32: Option<LibraryDownload>,

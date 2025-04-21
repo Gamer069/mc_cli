@@ -92,8 +92,6 @@ pub fn classifiers_needed(classifiers: &LibraryClassifiers) -> Vec<&LibraryDownl
         }
         _ => {}
     }
-    println!("Downloads: {:?}", downloads);
-    println!("classifiers: {:?}", classifiers);
 
     downloads
 }

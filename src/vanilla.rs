@@ -67,60 +67,80 @@ pub fn list_files_recursively(dir: &Path) -> Vec<std::path::PathBuf> {
 }
 
 pub fn launch(json: VersionJson, version_dir: PathBuf, limit: String) {
-    let game_dir = version_dir.parent().unwrap().parent().unwrap().join("game");
-    let assets_dir = version_dir.parent().unwrap().parent().unwrap().join("assets");
+    let game_dir = version_dir
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("game");
+    let assets_dir = version_dir
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("assets");
     let libs = version_dir.join("libs");
+
     let mut classpath_paths = list_files_recursively(&libs);
     classpath_paths.push(version_dir.join("client.jar"));
     let classpath = if std::env::consts::OS == "windows" {
-        classpath_paths.iter().map(|e| {
-            e.to_string_lossy()
-        }).collect::<Vec<_>>().join(";")
+        classpath_paths
+            .iter()
+            .map(|e| e.to_string_lossy())
+            .collect::<Vec<_>>()
+            .join(";")
     } else {
-        classpath_paths.iter().map(|e| {
-            e.to_string_lossy()
-        }).collect::<Vec<_>>().join(":")
+        classpath_paths
+            .iter()
+            .map(|e| e.to_string_lossy())
+            .collect::<Vec<_>>()
+            .join(":")
     };
-    let mut jvm_args: Vec<String> = vec![];
-    jvm_args.push(format!("-Xmx{}", limit));
-    // DONT MIND THIS CODE. I KNOW IT'S TERRIBLE
+
+    let mut jvm_args: Vec<String> = vec![format!("-Xmx{}", limit)];
+
     if let Some(arguments) = json.arguments.clone() {
         for arg in arguments.jvm {
             match arg {
                 version::JvmArgument::String(arg) => jvm_args.push(arg),
                 version::JvmArgument::ArgWithRule { rules, value } => {
-                    for rule in rules {
-                        if rules::matches_os_rule(&rule) {
+                    for rule in &rules {
+                        if rules::matches_os_rule(rule) {
                             match value {
                                 version::JvmArgumentValue::String(ref val) => {
                                     jvm_args.push(val.clone());
-                                },
+                                }
                                 version::JvmArgumentValue::Strings(ref vals) => {
-                                    for val in vals {
-                                        jvm_args.push(val.clone());
-                                    }
-                                },
+                                    jvm_args.extend(vals.clone());
+                                }
                             }
                         }
                     }
-                },
+                }
             }
         }
     } else {
-        jvm_args.push("-Djava.library.path=${natives_directory}".to_owned());
-        jvm_args.push("-Djna.tmpdir=${natives_directory}".to_owned());
-        jvm_args.push("-Dorg.lwjgl.system.SharedLibraryExtractPath=${natives_directory}".to_owned());
-        jvm_args.push("-Dio.netty.native.workdir=${natives_directory}".to_owned());
-        jvm_args.push("-Dminecraft.launcher.brand=${launcher_name}".to_owned());
-        jvm_args.push("-Dminecraft.launcher.version=${launcher_version}".to_owned());
-        jvm_args.push("-cp".to_owned());
-        jvm_args.push("${classpath}".to_owned());
+        jvm_args.extend(vec![
+            "-Djava.library.path=${natives_directory}".to_owned(),
+            "-Djna.tmpdir=${natives_directory}".to_owned(),
+            "-Dorg.lwjgl.system.SharedLibraryExtractPath=${natives_directory}".to_owned(),
+            "-Dio.netty.native.workdir=${natives_directory}".to_owned(),
+            "-Dminecraft.launcher.brand=${launcher_name}".to_owned(),
+            "-Dminecraft.launcher.version=${launcher_version}".to_owned(),
+            "-cp".to_owned(),
+            "${classpath}".to_owned(),
+        ]);
     }
-    let jvm_args_str = jvm_args.join(" ")
-        .replace("${natives_directory}", &libs.to_string_lossy().clone())
-        .replace("${classpath}", &classpath)
-        .replace("${launcher_name}", "mc_cli")
-        .replace("${launcher_version}", env!("CARGO_PKG_VERSION"));
+
+    let jvm_args_resolved: Vec<String> = jvm_args
+        .into_iter()
+        .map(|arg| {
+            arg.replace("${natives_directory}", &libs.to_string_lossy())
+                .replace("${classpath}", &classpath)
+                .replace("${launcher_name}", "mc_cli")
+                .replace("${launcher_version}", env!("CARGO_PKG_VERSION"))
+        })
+        .collect::<Vec<_>>();
 
     let mut game_args: Vec<String> = vec![];
     let mut features: HashMap<String, bool> = HashMap::new();
@@ -133,81 +153,77 @@ pub fn launch(json: VersionJson, version_dir: PathBuf, limit: String) {
     features.insert("is_quick_play_realms".to_owned(), false);
 
     if let Some(arguments) = json.arguments.clone() {
-        for arg in json.arguments.unwrap().game {
+        for arg in arguments.game {
             match arg {
                 version::GameArgument::String(arg) => game_args.push(arg),
                 version::GameArgument::ArgWithRule { rules, value } => {
-                    for rule in rules {
-                        if rules::matches_arg_rule(features.clone(), &rule) {
+                    for rule in &rules {
+                        if rules::matches_arg_rule(features.clone(), rule) {
                             match value {
                                 version::GameArgumentValue::String(ref val) => {
                                     game_args.push(val.clone());
-                                },
+                                }
                                 version::GameArgumentValue::Strings(ref vals) => {
-                                    for val in vals {
-                                        game_args.push(val.clone());
-                                    }
-                                },
+                                    game_args.extend(vals.clone());
+                                }
                             }
                         }
                     }
-                },
+                }
             }
         }
-    } else {
-        if let Some(minecraft_arguments) = json.minecraftArguments.clone() {
-            let args = minecraft_arguments.split(" ").collect::<Vec<_>>();
-            for arg in args {
-                game_args.push(arg.to_owned());
-            }
-        }
+    } else if let Some(minecraft_arguments) = json.minecraftArguments.clone() {
+        let args = minecraft_arguments.split(' ').map(|s| s.to_owned()).collect::<Vec<_>>();
+        game_args.extend(args);
     }
-    let game_args_str = game_args
-        .join(" ")
-        .replace("${auth_player_name}", "qwerty")
-        .replace("${version_name}", version_dir
-            .file_name()
-            .unwrap()
-            .to_str()
-            .unwrap()
-        )
-        .replace("${game_directory}", game_dir.to_str().unwrap())
-        .replace("${auth_uuid}", &Uuid::new_v4().to_string())
-        .replace("${auth_access_token}", &"".to_string())
-        .replace("${clientid}", &Uuid::new_v4().to_string())
-        .replace("${auth_xuid}", &"0".to_string())
-        .replace("${user_type}", &"offline".to_string())
-        .replace("${version_type}", &json.r#type)
-        .replace("${assets_index_name}", &version_dir.file_name().unwrap().to_string_lossy())
-        .replace("${assets_root}", assets_dir.to_str().unwrap());
+
+    let game_args_resolved: Vec<String> = game_args
+        .into_iter()
+        .map(|arg| {
+            arg.replace("${auth_player_name}", "qwerty")
+                .replace(
+                    "${version_name}",
+                    version_dir.file_name().unwrap().to_str().unwrap(),
+                )
+                .replace("${game_directory}", game_dir.to_str().unwrap())
+                .replace("${auth_uuid}", &Uuid::new_v4().to_string())
+                .replace("${auth_access_token}", "")
+                .replace("${clientid}", &Uuid::new_v4().to_string())
+                .replace("${auth_xuid}", "0")
+                .replace("${user_type}", "offline")
+                .replace("${version_type}", &json.r#type)
+                .replace(
+                    "${assets_index_name}",
+                    &version_dir.file_name().unwrap().to_string_lossy(),
+                )
+                .replace("${assets_root}", assets_dir.to_str().unwrap())
+        })
+        .collect::<Vec<_>>();
 
     let mut cmd: Vec<String> = vec![];
-
-    for jvm_arg in jvm_args_str.split(" ") {
-        cmd.push(jvm_arg.to_owned());
-    }
-
+    cmd.extend(jvm_args_resolved);
     cmd.push(json.mainClass);
+    cmd.extend(game_args_resolved);
 
-    for game_arg in game_args_str.split(" ") {
-        cmd.push(game_arg.to_owned());
-    }
+    cmd.push("-Dorg.lwjgl.util.Debug=true".to_owned());
 
     println!("cmd: {:?}", cmd);
 
-    let mut cmd = Command::new("java")
-        .args(cmd)
+
+    let mut process = Command::new("java")
+        .args(&cmd)
         .stdout(Stdio::piped())
         .spawn()
-        .expect("Failed to run minecraft");
+        .expect("Failed to run Minecraft");
 
-    let stdout = cmd.stdout.take().expect("Failed to take stdout");
+    let stdout = process.stdout.take().expect("Failed to take stdout");
     let reader = BufReader::new(stdout);
     for line in reader.lines() {
-        let line = line.expect("Failed to get stdout line");
+        let line = line.expect("Failed to read stdout line");
         println!("{}", line);
     }
-    let status = cmd.wait().expect("Failed to wait for child to exit");
+
+    let status = process.wait().expect("Failed to wait for child");
     println!("Exited with {}", status);
 }
 
@@ -282,18 +298,18 @@ pub fn handle(opt_version: Option<String>, limit: String) {
                 let _ = fs::create_dir_all(libs.join(path.parent().unwrap()));
                 let _ = util::download(artifact.url.as_str(), &libs.as_path().join(path), "Downloaded lib".to_owned()).expect("Failed to download library");
             }
-            if let Some(classifiers) = &lib.downloads.classifiers {
-                let needed = rules::classifiers_needed(classifiers);
+        }
+        if let Some(classifiers) = &lib.downloads.classifiers {
+            let needed = rules::classifiers_needed(classifiers);
 
-                println!("asdf needed: {:?}", &needed);
+            println!("asdf needed: {:?}", &needed);
 
-                for needed in needed {
-                    println!("asdf url: {}", &needed.url);
-                    let url = &needed.url;
-                    let path = Path::new(&needed.path);
-                    let _ = fs::create_dir_all(libs.join(path.parent().unwrap()));
-                    let _ = util::download(needed.url.as_str(), &libs.as_path().join(path), "Downloaded classifier lib".to_owned()).expect("Failed to download classifier lib");
-                }
+            for needed in needed {
+                println!("asdf url: {}", &needed.url);
+                let url = &needed.url;
+                let path = Path::new(&needed.path);
+                let _ = fs::create_dir_all(libs.join(path.parent().unwrap()));
+                let _ = util::download(needed.url.as_str(), &libs.as_path().join(path), "Downloaded classifier lib".to_owned()).expect("Failed to download classifier lib");
             }
         }
     }
