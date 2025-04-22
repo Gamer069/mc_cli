@@ -192,6 +192,7 @@ pub fn launch(json: VersionJson, version_dir: PathBuf, limit: String) {
                 .replace("${auth_xuid}", "0")
                 .replace("${user_type}", "offline")
                 .replace("${version_type}", &json.r#type)
+                .replace("${user_properties}", "{}")
                 .replace(
                     "${assets_index_name}",
                     &version_dir.file_name().unwrap().to_string_lossy(),
@@ -204,8 +205,6 @@ pub fn launch(json: VersionJson, version_dir: PathBuf, limit: String) {
     cmd.extend(jvm_args_resolved);
     cmd.push(json.mainClass);
     cmd.extend(game_args_resolved);
-
-    cmd.push("-Dorg.lwjgl.util.Debug=true".to_owned());
 
     println!("cmd: {:?}", cmd);
 
