@@ -27,7 +27,7 @@ pub struct LibraryDownload {
 pub struct Downloads {
     pub client: Download,
     pub client_mappings: Option<Download>,
-    pub server: Download,
+    pub server: Option<Download>,
     pub server_mappings: Option<Download>,
 }
 

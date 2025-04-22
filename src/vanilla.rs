@@ -198,6 +198,7 @@ pub fn launch(json: VersionJson, version_dir: PathBuf, limit: String) {
                     &version_dir.file_name().unwrap().to_string_lossy(),
                 )
                 .replace("${assets_root}", assets_dir.to_str().unwrap())
+                .replace("${game_assets}", assets_dir.to_str().unwrap())
         })
         .collect::<Vec<_>>();
 
