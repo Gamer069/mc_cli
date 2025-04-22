@@ -71,11 +71,17 @@ pub struct AssetIndex {
     pub url: String,
 }
 
+#[derive(Deserialize, Debug, Clone)]
+pub struct Extract {
+    pub exclude: Vec<String>
+}
+
 #[derive(Deserialize, Debug)]
 pub struct Library {
     pub downloads: LibraryDownloads,
     pub name: String,
     pub rules: Option<Vec<Rule>>,
+    pub extract: Option<Extract>,
 }
 
 #[derive(Deserialize, Debug)]

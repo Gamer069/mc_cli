@@ -1,6 +1,7 @@
 use std::{borrow, clone, collections::HashMap, fs, io::{BufRead, BufReader}, path::{Path, PathBuf}, process::{Command, Stdio}};
 
 use directories::ProjectDirs;
+use jars::{Jar, JarOptionBuilder};
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -211,6 +212,7 @@ pub fn launch(json: VersionJson, version_dir: PathBuf, limit: String) {
 
 
     let mut process = Command::new("java")
+        .current_dir(game_dir)
         .args(&cmd)
         .stdout(Stdio::piped())
         .spawn()
@@ -310,6 +312,25 @@ pub fn handle(opt_version: Option<String>, limit: String) {
                 let path = Path::new(&needed.path);
                 let _ = fs::create_dir_all(libs.join(path.parent().unwrap()));
                 let _ = util::download(needed.url.as_str(), &libs.as_path().join(path), "Downloaded classifier lib".to_owned()).expect("Failed to download classifier lib");
+                if let Some(extract) = &lib.extract {
+                    let excluded = extract.clone().exclude;
+                    let option = JarOptionBuilder::builder().target(libs.to_str().unwrap()).build();
+                    let lib = libs.as_path().join(path);
+                    println!("lib: {:#?}", lib);
+                    let jar = jars::jar(lib, option).expect("Failed to extract library jar file");
+                    for file in jar.files {
+                        let dir = if Path::new(&file.0).is_dir() {
+                            Path::new(&file.0)
+                        } else {
+                            Path::new(&file.0).parent().unwrap()
+                        };
+                        fs::create_dir_all(libs.join(dir)).expect("Failed to create_dir_all before extracting library file");
+                        fs::write(libs.join(file.0.clone()), file.1).expect(&format!("Failed to write extracted library file {}", file.0));
+                    }
+                    for excluded in excluded {
+                        let _ = fs::remove_file(excluded); // don't care if it errors or not
+                    }
+                }
             }
         }
     }

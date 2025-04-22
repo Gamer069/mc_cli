@@ -1,2 +1,0 @@
-currently for some versions to work (like 1.8.9), you have to extract the .so-s/.dylib-s/.dll-s from natives and put them into the root of libs
-this process will be automated, but for now you'll just have to suffer.
