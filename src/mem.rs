@@ -21,7 +21,7 @@ pub fn can_use(mem: String) -> bool {
     };
 
     // Return the value in bytes (convert from the number with the appropriate multiplier)
-    ((number * multiplier as f64) as u64) < sys_info::mem_info().unwrap().avail
+    ((number * multiplier as f64) as u64) < sys_info::mem_info().unwrap().free
 }
 pub fn check_if_valid(limit: String) {
     if !is_valid(limit.clone()) {
@@ -29,7 +29,7 @@ pub fn check_if_valid(limit: String) {
         std::process::exit(-1);
     }
     if !can_use(limit.clone()) {
-        eprintln!("FATAL: memory limit must be lower than the available memory.");
+        eprintln!("FATAL: memory limit must be lower than the free memory.");
         std::process::exit(-1);
     }
 }
