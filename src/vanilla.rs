@@ -3,7 +3,6 @@ use std::{borrow, clone, collections::HashMap, fs, io::{BufRead, BufReader}, pat
 use directories::ProjectDirs;
 use jars::{Jar, JarOptionBuilder};
 use serde::Deserialize;
-use uuid::Uuid;
 
 use crate::{assets::AssetIndexJson, mem, rules, util, version::{self, VersionJson}};
 
@@ -67,7 +66,7 @@ pub fn list_files_recursively(dir: &Path) -> Vec<std::path::PathBuf> {
     files
 }
 
-pub fn launch(json: VersionJson, version_dir: PathBuf, limit: String) {
+pub fn launch(json: VersionJson, version_dir: PathBuf, limit: String, xid: String, jwt: String, cli: String, uuid: String, name: String) {
     let game_dir = version_dir
         .parent()
         .unwrap()
@@ -181,17 +180,17 @@ pub fn launch(json: VersionJson, version_dir: PathBuf, limit: String) {
     let game_args_resolved: Vec<String> = game_args
         .into_iter()
         .map(|arg| {
-            arg.replace("${auth_player_name}", "qwerty")
+            arg.replace("${auth_player_name}", &name)
                 .replace(
                     "${version_name}",
                     version_dir.file_name().unwrap().to_str().unwrap(),
                 )
                 .replace("${game_directory}", game_dir.to_str().unwrap())
-                .replace("${auth_uuid}", &Uuid::new_v4().to_string())
-                .replace("${auth_access_token}", "")
-                .replace("${clientid}", &Uuid::new_v4().to_string())
-                .replace("${auth_xuid}", "0")
-                .replace("${user_type}", "offline")
+                .replace("${auth_uuid}", &uuid)
+                .replace("${auth_access_token}", &jwt)
+                .replace("${clientid}", &cli)
+                .replace("${auth_xuid}", &xid)
+                .replace("${user_type}", "msa")
                 .replace("${version_type}", &json.r#type)
                 .replace("${user_properties}", "{}")
                 .replace(
@@ -237,7 +236,7 @@ pub fn create_dirs(vers: PathBuf, ver: PathBuf) {
     let _ = fs::create_dir(vers.parent().unwrap().join("assets"));
 }
 
-pub fn handle(opt_version: Option<String>, limit: String) {
+pub fn handle(opt_version: Option<String>, limit: String, xid: String, jwt: String, cli: String, uuid: String, name: String) {
     mem::check_if_valid(limit.clone());
 
     let manifest = get_manifest();
@@ -260,7 +259,7 @@ pub fn handle(opt_version: Option<String>, limit: String) {
             Err(err) => panic!("err: {:#?}", err),
         };
 
-        launch(version_json, ver, limit.clone());
+        launch(version_json, ver, limit.clone(), xid, jwt, cli, uuid, name);
 
         return;
     }
@@ -351,5 +350,5 @@ pub fn handle(opt_version: Option<String>, limit: String) {
         util::download(&format!("https://resources.download.minecraft.net/{}/{}", dir, hash).to_string(), &dir_full.join(hash), "Downloaded resources".to_owned()).expect(format!("Failed to download resource {}", hash).as_str());
     }
 
-    launch(version_json, ver, limit.clone());
+    launch(version_json, ver, limit.clone(), xid, jwt, cli, uuid, name);
 }
