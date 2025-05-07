@@ -134,3 +134,35 @@ pub enum GameArgument {
     String(String),
     ArgWithRule { rules: Vec<Rule>, value: GameArgumentValue },
 }
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct FabricVersion {
+    pub version: String,
+    pub stable: bool,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct FabricLoaderVersion {
+    pub separator: String,
+    pub build: i32,
+    pub maven: String,
+    pub version: String,
+    pub stable: bool,
+}
+
+impl FabricLoaderVersion {
+    pub fn split(&self) -> (&str, &str) {
+        let arr = self.version.split(&self.separator).collect::<Vec<&str>>();
+        if arr.len() == 2 {
+            (arr[0], arr[1])
+        } else {
+            (self.version.as_str(), "")
+        }
+    }
+    pub fn replace(&self) -> String {
+        format!("{}{}", self.maven.replace(&self.version, "").replace(self.separator.as_str(), "/").replace(".", "/").replace(":", "/"), self.version)
+    }
+    pub fn jar_path(&self) -> String {
+        format!("{}/fabric-loader-{}.jar", self.replace(), self.version)
+    }
+}
