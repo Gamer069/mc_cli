@@ -84,6 +84,17 @@ pub struct Library {
     pub extract: Option<Extract>,
 }
 
+#[derive(Deserialize, Debug, Clone)]
+pub struct FabricLib {
+    pub name: String,
+    pub url: String,
+    pub md5: String,
+    pub sha1: String,
+    pub sha256: String,
+    pub sha512: String,
+    pub size: i32,
+}
+
 #[derive(Deserialize, Debug)]
 // because serde doesn't wanna rename it for me!
 #[allow(non_snake_case)]
@@ -150,6 +161,10 @@ pub struct FabricLoaderVersion {
     pub stable: bool,
 }
 
+pub fn maven_to_path(maven: String, ver: String) -> String {
+    format!("{}{}", maven.replace(".", "").replace(":", "").replace(&ver, ""), ver)
+}
+
 impl FabricLoaderVersion {
     pub fn split(&self) -> (&str, &str) {
         let arr = self.version.split(&self.separator).collect::<Vec<&str>>();
@@ -165,4 +180,30 @@ impl FabricLoaderVersion {
     pub fn jar_path(&self) -> String {
         format!("{}/fabric-loader-{}.jar", self.replace(), self.version)
     }
+    pub fn json_path(&self) -> String {
+        format!("{}/fabric-loader-{}.json", self.replace(), self.version)
+    }
+}
+
+#[derive(Deserialize, Debug, Clone)]
+#[allow(non_snake_case)]
+pub struct FabricLoaderJSON {
+    pub version: i32,
+    pub min_java_version: i32,
+    pub libraries: FabricLibraries,
+    pub mainClass: FabricMainClass,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct FabricLibraries {
+    pub client: Vec<FabricLib>,
+    pub common: Vec<FabricLib>,
+    pub server: Vec<FabricLib>,
+    pub development: Vec<FabricLib>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct FabricMainClass {
+    pub client: String,
+    pub server: String,
 }

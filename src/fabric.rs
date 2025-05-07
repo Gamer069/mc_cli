@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use directories::ProjectDirs;
 
 use crate::{mem, util};
-use crate::version::{FabricLoaderVersion, FabricVersion};
+use crate::version::{FabricLoaderVersion, FabricVersion, FabricLoaderJSON};
 
 const FABRIC_GAME_VERSIONS: &'static str = "https://meta.fabricmc.net/v2/versions/game";
 const FABRIC_LOADER_VERSIONS: &'static str = "https://meta.fabricmc.net/v2/versions/loader";
@@ -27,7 +27,43 @@ pub fn get_ver(versions: Vec<FabricVersion>, version: String) -> FabricVersion {
 pub fn down(loader: &FabricLoaderVersion, version: &FabricVersion, ver: PathBuf) {
     let loader_jar_url = format!("{}{}", FABRIC_MAVEN, loader.jar_path());
     println!("downloading loader jar from {}", loader_jar_url);
-    let _ = util::download(&loader_jar_url, ver.as_path(), "Downloaded fabric loader jar".to_string());
+
+    let jar_path = ver.join("fabric.jar");
+
+    if !jar_path.exists() {
+        let _ = util::download(&loader_jar_url, jar_path.as_path(), "Downloaded fabric loader jar".to_string()).expect("Failed to download fabric JAR");
+    }
+
+    let loader_json_url = format!("{}{}", FABRIC_MAVEN, loader.json_path());
+    println!("Downloading loader JSON from {}", loader_json_url);
+
+    let json_path = ver.join("fabric.json");
+
+    let loader_json = if !json_path.exists() {
+        util::download_text(&loader_json_url, json_path.as_path(), "Downloaded fabric loader JSON".to_string()).expect("Failed to download fabric loader JSON")
+    } else {
+        fs::read_to_string(json_path.as_path()).unwrap()
+    };
+
+    let parsed_json: FabricLoaderJSON = serde_json::from_str(&loader_json).expect("Failed to parse loader JSON");
+    println!("{:#?}", parsed_json);
+
+    for lib in parsed_json.libraries.common {
+        let pos = coord.rfind(':').unwrap();
+        let version = &coord[pos + 1..];
+
+        let path = maven_to_path(lib.url, version);
+        println!("path: {}", path);
+    }
+    println!("Downloaded common libs...");
+    for lib in parsed_json.libraries.server {
+        println!("{}", lib.url);
+    }
+    println!("Downloaded server libs...");
+    for lib in parsed_json.libraries.client {
+        println!("{}", lib.url);
+    }
+    println!("Downloaded client libs...");
 }
 
 pub fn create_dirs(vers: PathBuf, ver: PathBuf) {
