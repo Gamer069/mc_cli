@@ -51,22 +51,6 @@ pub fn get_manifest() -> VanillaManifest {
 }
 
 
-pub fn list_files_recursively(dir: &Path) -> Vec<std::path::PathBuf> {
-    let mut files = Vec::new();
-    if dir.is_dir() {
-        for entry in fs::read_dir(dir).unwrap() {
-            let entry = entry.unwrap();
-            let path = entry.path();
-            if path.is_dir() {
-                files.extend(list_files_recursively(&path));
-            } else {
-                files.push(path);
-            }
-        }
-    }
-    files
-}
-
 pub fn launch(json: VersionJson, version_dir: PathBuf, limit: String) {
     let game_dir = version_dir
         .parent()
@@ -82,7 +66,7 @@ pub fn launch(json: VersionJson, version_dir: PathBuf, limit: String) {
         .join("assets");
     let libs = version_dir.join("libs");
 
-    let mut classpath_paths = list_files_recursively(&libs);
+    let mut classpath_paths = util::list_files_recursively(&libs);
     classpath_paths.push(version_dir.join("client.jar"));
     let classpath = if std::env::consts::OS == "windows" {
         classpath_paths
@@ -237,7 +221,7 @@ pub fn create_dirs(vers: PathBuf, ver: PathBuf) {
     let _ = fs::create_dir(vers.parent().unwrap().join("assets"));
 }
 
-pub fn handle(opt_version: Option<String>, limit: String) {
+pub fn handle(opt_version: Option<String>, limit: String, b_launch: bool, version_dir: Option<&Path>) {
     mem::check_if_valid(limit.clone());
 
     let manifest = get_manifest();
@@ -246,26 +230,35 @@ pub fn handle(opt_version: Option<String>, limit: String) {
     let proj_dirs = ProjectDirs::from("me", "illia", "mc_cli").unwrap();
     let data_dir = proj_dirs.data_dir();
     let vers = data_dir.join("vers");
-    let ver = vers.join(version.as_str());
+    let binding = vers.join(version.as_str());
+    let ver = version_dir.unwrap_or(&binding);
     let libs = ver.join("libs");
 
-    if ver.is_dir() {
-        println!("Launching vanilla {} with memory limit {}", version, limit);
+    'launch_logic: {
+        if ver.is_dir() {
+            println!("Launching vanilla {} with memory limit {}", version, limit);
 
-        let text = fs::read_to_string(ver.join("version.json")).expect("failed to read version.json");
-        let mut version_json_err = serde_json::Deserializer::from_str(&text);
-        let version_json_res = serde_path_to_error::deserialize::<_, VersionJson>(&mut version_json_err);
-        let version_json = match version_json_res {
-            Ok(val) => val,
-            Err(err) => panic!("err: {:#?}", err),
-        };
+            let text = fs::read_to_string(ver.join("version.json"));
+            if !text.is_ok() {
+                break 'launch_logic;
+            }
+            let text = text.unwrap();
+            let mut version_json_err = serde_json::Deserializer::from_str(&text);
+            let version_json_res = serde_path_to_error::deserialize::<_, VersionJson>(&mut version_json_err);
+            let version_json = match version_json_res {
+                Ok(val) => val,
+                Err(err) => panic!("err: {:#?}", err),
+            };
 
-        launch(version_json, ver, limit.clone());
+            if b_launch {
+                launch(version_json, ver.to_path_buf(), limit.clone());
+            }
 
-        return;
+            return;
+        }
     }
 
-    create_dirs(vers, ver.clone());
+    create_dirs(vers, ver.to_path_buf());
 
     let ver_url = get_ver_json_url(manifest, version.clone());
 
@@ -351,5 +344,7 @@ pub fn handle(opt_version: Option<String>, limit: String) {
         util::download(&format!("https://resources.download.minecraft.net/{}/{}", dir, hash).to_string(), &dir_full.join(hash), "Downloaded resources".to_owned()).expect(format!("Failed to download resource {}", hash).as_str());
     }
 
-    launch(version_json, ver, limit.clone());
+    if b_launch {
+        launch(version_json, ver.to_path_buf(), limit.clone());
+    }
 }

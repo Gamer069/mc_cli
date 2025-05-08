@@ -1,9 +1,11 @@
 use std::fs;
+use std::io::{BufRead as _, BufReader};
 use std::path::PathBuf;
+use std::process::{Command, Stdio};
 
 use directories::ProjectDirs;
 
-use crate::{mem, util};
+use crate::{mem, util, vanilla, version};
 use crate::version::{FabricLoaderVersion, FabricVersion, FabricLoaderJSON};
 
 const FABRIC_GAME_VERSIONS: &'static str = "https://meta.fabricmc.net/v2/versions/game";
@@ -24,7 +26,11 @@ pub fn get_ver(versions: Vec<FabricVersion>, version: String) -> FabricVersion {
     ver.clone()
 }
 
-pub fn down(loader: &FabricLoaderVersion, version: &FabricVersion, ver: PathBuf) {
+/// returns the full fabric loader JSON
+/// {loader} the loader version
+/// {version} the minecarft version
+/// {ver} the version dir
+pub fn down(loader: &FabricLoaderVersion, version: &FabricVersion, ver: PathBuf) -> FabricLoaderJSON {
     let loader_jar_url = format!("{}{}", FABRIC_MAVEN, loader.jar_path());
     println!("downloading loader jar from {}", loader_jar_url);
 
@@ -48,22 +54,32 @@ pub fn down(loader: &FabricLoaderVersion, version: &FabricVersion, ver: PathBuf)
     let parsed_json: FabricLoaderJSON = serde_json::from_str(&loader_json).expect("Failed to parse loader JSON");
     println!("{:#?}", parsed_json);
 
-    for lib in parsed_json.libraries.common {
-        let pos = coord.rfind(':').unwrap();
-        let version = &coord[pos + 1..];
-
-        let path = maven_to_path(lib.url, version);
-        println!("path: {}", path);
+    for lib in &parsed_json.libraries.common {
+        let path_from_maven = version::maven_to_path(lib.name.clone());
+        let path = format!("{}{}", lib.url, path_from_maven);
+        let lib_path = ver.join("libs").join(path_from_maven.clone());
+        let _ = fs::create_dir_all(lib_path.clone().parent().unwrap());
+        let _ = util::download(path.as_str(), &lib_path, "Downloaded common lib jar".to_owned()).expect("");
     }
     println!("Downloaded common libs...");
-    for lib in parsed_json.libraries.server {
-        println!("{}", lib.url);
+    for lib in &parsed_json.libraries.server {
+        let path_from_maven = version::maven_to_path(lib.name.clone());
+        let path = format!("{}{}", lib.url, path_from_maven);
+        let lib_path = ver.join("libs").join(path_from_maven.clone());
+        let _ = fs::create_dir_all(lib_path.clone().parent().unwrap());
+        let _ = util::download(path.as_str(), &lib_path, "Downloaded server lib jar".to_owned()).expect("");
     }
     println!("Downloaded server libs...");
-    for lib in parsed_json.libraries.client {
-        println!("{}", lib.url);
+    for lib in &parsed_json.libraries.client {
+        let path_from_maven = version::maven_to_path(lib.name.clone());
+        let path = format!("{}{}", lib.url, path_from_maven);
+        let lib_path = ver.join("libs").join(path_from_maven.clone());
+        let _ = fs::create_dir_all(lib_path.clone().parent().unwrap());
+        let _ = util::download(path.as_str(), &lib_path, "Downloaded client lib jar".to_owned()).expect("");
     }
     println!("Downloaded client libs...");
+
+    parsed_json
 }
 
 pub fn create_dirs(vers: PathBuf, ver: PathBuf) {
@@ -74,7 +90,50 @@ pub fn create_dirs(vers: PathBuf, ver: PathBuf) {
     let _ = fs::create_dir(vers.parent().unwrap().join("assets"));
 }
 
-pub fn launch() {
+pub fn launch(ver_dir: PathBuf, main_class: String) {
+    println!("Launching minecraft client...");
+    let main_class = dbg!(main_class);
+    let game_dir = ver_dir.join("game");
+    let _ = fs::create_dir_all(&game_dir);
+
+    let mut classpath: String = "".to_owned();
+    let libs = util::list_files_recursively(&ver_dir.join("libs"));
+    let sep = if cfg!(target_os = "windows") { ';' } else { ':' };
+
+    for lib in libs {
+        classpath.push_str(lib.to_str().unwrap());
+        classpath.push(sep);
+    }
+
+    classpath.push_str(ver_dir.join("client.jar").to_str().unwrap());
+    classpath.push(sep);
+    classpath.push_str(ver_dir.join("fabric.jar").to_str().unwrap());
+
+    println!("{}", classpath);
+
+    let mut cmd: Vec<String> = vec![];
+    cmd.push("-cp".to_owned());
+    cmd.push(classpath);
+    cmd.push(main_class);
+
+    println!("{:#?}", cmd);
+
+    let mut process = Command::new("java")
+        .current_dir(game_dir)
+        .args(&cmd)
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("Failed to run Minecraft");
+
+    let stdout = process.stdout.take().expect("Failed to take stdout");
+    let reader = BufReader::new(stdout);
+    for line in reader.lines() {
+        let line = line.expect("Failed to read stdout line");
+        println!("{}", line);
+    }
+
+    let status = process.wait().expect("Failed to wait for child");
+    println!("Exited with {}", status);
 }
 
 pub fn handle(opt_version: Option<String>, opt_loader_version: Option<String>, limit: String) {
@@ -118,7 +177,8 @@ pub fn handle(opt_version: Option<String>, opt_loader_version: Option<String>, l
 
     create_dirs(vers, ver_path.clone());
 
-    down(loader, &ver, ver_path.clone());
+    vanilla::handle(Some(ver.version.clone()), limit.clone(), false, Some(ver_path.as_path()));
+    let parsed_json = down(loader, &ver, ver_path.clone());
 
-    launch();
+    launch(ver_path, parsed_json.mainClass.client);
 }

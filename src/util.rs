@@ -1,4 +1,4 @@
-use std::{error::Error, fs::File, io::{Read, Write}, path::Path};
+use std::{error::Error, fs::{self, File}, io::{Read, Write}, path::{Path, PathBuf}};
 use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::blocking::Client;
 
@@ -38,7 +38,7 @@ pub fn download_text_no_save(url: &str, msg: String) -> Result<String, Box<dyn E
     let total = resp.content_length().unwrap_or(0);
     let pb = ProgressBar::new(total);
     pb.set_style(ProgressStyle::default_bar()
-        .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})")
+        .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta}) {msg}")
         .unwrap()
         .progress_chars("#>-"));
 
@@ -65,7 +65,7 @@ pub fn download(url: &str, out: &Path, msg: String) -> Result<Vec<u8>, Box<dyn E
     let total = resp.content_length().unwrap_or(0);
     let pb = ProgressBar::new(total);
     pb.set_style(ProgressStyle::default_bar()
-        .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})")
+        .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta}) {msg}")
         .unwrap()
         .progress_chars("#>-"));
 
@@ -94,7 +94,7 @@ pub fn download_no_save(url: &str, msg: String) -> Result<Vec<u8>, Box<dyn Error
     let total = resp.content_length().unwrap_or(0);
     let pb = ProgressBar::new(total);
     pb.set_style(ProgressStyle::default_bar()
-        .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})")
+        .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta}) {msg}")
         .unwrap()
         .progress_chars("#>-"));
 
@@ -113,3 +113,20 @@ pub fn download_no_save(url: &str, msg: String) -> Result<Vec<u8>, Box<dyn Error
 
     Ok(downloaded)
 }
+
+pub fn list_files_recursively(dir: &Path) -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    if dir.is_dir() {
+        for entry in fs::read_dir(dir).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if path.is_dir() {
+                files.extend(list_files_recursively(&path));
+            } else {
+                files.push(path);
+            }
+        }
+    }
+    files
+}
+

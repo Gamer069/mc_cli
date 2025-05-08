@@ -161,8 +161,20 @@ pub struct FabricLoaderVersion {
     pub stable: bool,
 }
 
-pub fn maven_to_path(maven: String, ver: String) -> String {
-    format!("{}{}", maven.replace(".", "").replace(":", "").replace(&ver, ""), ver)
+pub fn maven_to_path(coords: String) -> String {
+    let parts: Vec<&str> = coords.split(':').collect();
+
+    if parts.len() != 3 {
+        panic!("Invalid Maven coordinates, expected format 'groupId:artifactId:version'");
+    }
+
+    let group_id = parts[0];
+    let artifact_id = parts[1];
+    let version = parts[2];
+
+    let group_path = group_id.replace('.', "/");
+
+    format!("{}/{}/{}/{}-{}.jar", group_path, artifact_id, version, artifact_id, version)
 }
 
 impl FabricLoaderVersion {

@@ -15,7 +15,7 @@ fn main() {
 
     match app.command {
         app::Subcommand::Vanilla { version, mem } => {
-            vanilla::handle(version, mem);
+            vanilla::handle(version, mem, true, None);
         },
         app::Subcommand::Fabric { version, loader_version, mem } => {
             fabric::handle(version, loader_version, mem);
