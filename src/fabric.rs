@@ -6,10 +6,11 @@ use std::process::{Command, Stdio};
 use directories::ProjectDirs;
 
 use crate::{mem, util, vanilla, version};
-use crate::version::{FabricLoaderVersion, FabricVersion, FabricLoaderJSON};
+use crate::version::{FabricLoaderVersion, FabricVersion, FabricLoaderJSON, FabricIntermediaryVersion};
 
 const FABRIC_GAME_VERSIONS: &'static str = "https://meta.fabricmc.net/v2/versions/game";
 const FABRIC_LOADER_VERSIONS: &'static str = "https://meta.fabricmc.net/v2/versions/loader";
+const FABRIC_INTERMEDIARY_VERSIONS: &'static str = "https://meta.fabricmc.net/v2/versions/intermediary";
 const FABRIC_MAVEN: &'static str = "https://maven.fabricmc.net/";
 
 pub fn get_ver(versions: Vec<FabricVersion>, version: String) -> FabricVersion {
@@ -26,11 +27,33 @@ pub fn get_ver(versions: Vec<FabricVersion>, version: String) -> FabricVersion {
     ver.clone()
 }
 
+pub fn down_intermediary(loader: &FabricLoaderVersion, version: &FabricVersion, ver: PathBuf) {
+    let intermediary_versions_text = util::download_text_no_save(FABRIC_INTERMEDIARY_VERSIONS, "Downloaded intermediary version JSON".to_string()).expect("Failed to download intermediary version JSON");
+    let intermediaries: Vec<FabricIntermediaryVersion> = serde_json::from_str(intermediary_versions_text.as_str()).expect("Failed to deserialize intermediary version JSON");
+    let mut intermediary: &FabricIntermediaryVersion = &FabricIntermediaryVersion {
+        maven: "werhiuyewqrhiu".to_string(),
+        version: "werhiuwer4iuh".to_string(),
+        stable: false,
+    };
+    intermediaries.iter().any(|i| {
+        if i.version == version.version {
+            intermediary = i;
+            return true;
+        }
+        return false;
+    });
+
+    let maven_path = version::maven_to_path(intermediary.maven.clone());
+    let maven_path_with_domain = format!("{}/{}", FABRIC_MAVEN, maven_path);
+    let _ = util::download(maven_path_with_domain.as_str(), ver.join("inter.jar").as_ref(), "Downloaded intermediary...".to_string()).expect("Failed to download intermediary");
+}
+
 /// returns the full fabric loader JSON
 /// {loader} the loader version
 /// {version} the minecarft version
 /// {ver} the version dir
 pub fn down(loader: &FabricLoaderVersion, version: &FabricVersion, ver: PathBuf) -> FabricLoaderJSON {
+    down_intermediary(loader, version, ver.clone());
     let loader_jar_url = format!("{}{}", FABRIC_MAVEN, loader.jar_path());
     println!("downloading loader jar from {}", loader_jar_url);
 
@@ -105,6 +128,8 @@ pub fn launch(ver_dir: PathBuf, main_class: String) {
         classpath.push(sep);
     }
 
+    classpath.push_str(ver_dir.join("inter.jar").to_str().unwrap());
+    classpath.push(sep);
     classpath.push_str(ver_dir.join("client.jar").to_str().unwrap());
     classpath.push(sep);
     classpath.push_str(ver_dir.join("fabric.jar").to_str().unwrap());

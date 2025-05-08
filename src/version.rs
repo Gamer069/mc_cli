@@ -219,3 +219,10 @@ pub struct FabricMainClass {
     pub client: String,
     pub server: String,
 }
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct FabricIntermediaryVersion {
+    pub maven: String,
+    pub version: String,
+    pub stable: bool,
+}
