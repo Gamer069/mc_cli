@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
 use directories::ProjectDirs;
+use uuid::Uuid;
 
 use crate::{mem, util, vanilla, version};
 use crate::version::{FabricLoaderVersion, FabricVersion, FabricLoaderJSON, FabricIntermediaryVersion};
@@ -140,6 +141,15 @@ pub fn launch(ver_dir: PathBuf, main_class: String) {
     cmd.push("-cp".to_owned());
     cmd.push(classpath);
     cmd.push(main_class);
+    cmd.push("--gameDir".to_string());
+    cmd.push(ver_dir.parent().unwrap().to_str().unwrap().to_string());
+    cmd.push("--assetsDir".to_string());
+    cmd.push(ver_dir.parent().unwrap().join("assets").to_str().unwrap().to_string());
+    cmd.push("--assetIndex".to_string());
+    let ver = ver_dir.file_name().unwrap().to_str().unwrap().replace("fabric-", "");
+    cmd.push(ver);
+    cmd.push("--uuid".to_string());
+    cmd.push(Uuid::new_v4().to_string());
 
     println!("{:#?}", cmd);
 
