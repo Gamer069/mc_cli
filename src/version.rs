@@ -149,7 +149,6 @@ pub enum GameArgument {
 #[derive(Deserialize, Debug, Clone)]
 pub struct FabricVersion {
     pub version: String,
-    pub stable: bool,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -158,7 +157,6 @@ pub struct FabricLoaderVersion {
     pub build: i32,
     pub maven: String,
     pub version: String,
-    pub stable: bool,
 }
 
 pub fn maven_to_path(coords: String) -> String {
@@ -224,5 +222,9 @@ pub struct FabricMainClass {
 pub struct FabricIntermediaryVersion {
     pub maven: String,
     pub version: String,
-    pub stable: bool,
+}
+
+pub enum UseQuilt {
+    Yes(bool),
+    No
 }
