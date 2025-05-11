@@ -32,8 +32,8 @@ pub fn down_intermediary(loader: &FabricLoaderVersion, version: &FabricVersion, 
     let intermediary_versions_text = util::download_text_no_save(FABRIC_INTERMEDIARY_VERSIONS, "Downloaded intermediary version JSON".to_string()).expect("Failed to download intermediary version JSON");
     let intermediaries: Vec<FabricIntermediaryVersion> = serde_json::from_str(intermediary_versions_text.as_str()).expect("Failed to deserialize intermediary version JSON");
     let mut intermediary: &FabricIntermediaryVersion = &FabricIntermediaryVersion {
-        maven: "werhiuyewqrhiu".to_string(),
-        version: "werhiuwer4iuh".to_string(),
+        maven: "".to_string(),
+        version: "".to_string(),
         stable: false,
     };
     intermediaries.iter().any(|i| {
