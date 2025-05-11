@@ -33,13 +33,13 @@ pub fn get_ver(versions: Vec<FabricVersion>, version: String) -> FabricVersion {
     ver.clone()
 }
 
-pub fn down_intermediary(loader: &FabricLoaderVersion, version: &FabricVersion, ver: PathBuf, use_quilt: UseQuilt) {
+pub async fn down_intermediary(loader: &FabricLoaderVersion, version: &FabricVersion, ver: PathBuf, use_quilt: UseQuilt) {
     let is_quilt = matches!(use_quilt, UseQuilt::Yes(_));
     let use_release = match use_quilt {
         UseQuilt::Yes(value) => value,
         UseQuilt::No => false,
     };
-    let intermediary_versions_text = util::download_text_no_save(if is_quilt { QUILT_INTERMEDIARY_VERSIONS } else { FABRIC_INTERMEDIARY_VERSIONS }, "Downloaded intermediary version JSON".to_string()).expect("Failed to download intermediary version JSON");
+    let intermediary_versions_text = util::download_text_no_save_async(if is_quilt { QUILT_INTERMEDIARY_VERSIONS } else { FABRIC_INTERMEDIARY_VERSIONS }, "Downloaded intermediary version JSON".to_string()).await.expect("Failed to download intermediary version JSON");
     let intermediaries: Vec<FabricIntermediaryVersion> = serde_json::from_str(intermediary_versions_text.as_str()).expect("Failed to deserialize intermediary version JSON");
     let mut intermediary: &FabricIntermediaryVersion = &FabricIntermediaryVersion {
         maven: "".to_string(),
@@ -55,28 +55,28 @@ pub fn down_intermediary(loader: &FabricLoaderVersion, version: &FabricVersion, 
 
     let maven_path = version::maven_to_path(intermediary.maven.clone());
     let maven_path_with_domain = format!("{}/{}", if is_quilt { format!("{}{}", QUILT_MAVEN, if use_release { "/release" } else { "/snapshot" }) } else { FABRIC_MAVEN.to_string() }, maven_path);
-    let _ = util::download(maven_path_with_domain.as_str(), ver.join("inter.jar").as_ref(), "Downloaded intermediary...".to_string()).expect("Failed to download intermediary");
+    let _ = util::download_async(maven_path_with_domain.as_str(), ver.join("inter.jar").as_ref(), "Downloaded intermediary...".to_string()).await.expect("Failed to download intermediary");
 }
 
 /// returns the full fabric loader JSON
 /// {loader} the loader version
 /// {version} the minecarft version
 /// {ver} the version dir
-pub fn down(loader: &FabricLoaderVersion, version: &FabricVersion, ver: PathBuf, use_quilt: UseQuilt) -> FabricLoaderJSON {
+pub async fn down(loader: &FabricLoaderVersion, version: &FabricVersion, ver: PathBuf, use_quilt: UseQuilt) -> FabricLoaderJSON {
     let is_quilt = matches!(use_quilt, UseQuilt::Yes(_));
     let use_release = match use_quilt {
         UseQuilt::Yes(value) => value,
         UseQuilt::No => false,
     };
 
-    down_intermediary(loader, version, ver.clone(), use_quilt);
+    down_intermediary(loader, version, ver.clone(), use_quilt).await;
     let loader_jar_url = format!("{}{}", if is_quilt { QUILT_MAVEN } else { FABRIC_MAVEN }, loader.jar_path());
     println!("downloading loader jar from {}", loader_jar_url);
 
     let jar_path = ver.join("fabric.jar");
 
     if !jar_path.exists() {
-        let _ = util::download(&loader_jar_url, jar_path.as_path(), "Downloaded fabric loader jar".to_string()).expect("Failed to download fabric JAR");
+        let _ = util::download_async(&loader_jar_url, jar_path.as_path(), "Downloaded fabric loader jar".to_string()).await.expect("Failed to download fabric JAR");
     }
 
     let loader_json_url = format!("{}{}", if is_quilt { QUILT_MAVEN } else { FABRIC_MAVEN }, loader.json_path());
@@ -85,7 +85,7 @@ pub fn down(loader: &FabricLoaderVersion, version: &FabricVersion, ver: PathBuf,
     let json_path = ver.join("fabric.json");
 
     let loader_json = if !json_path.exists() {
-        util::download_text(&loader_json_url, json_path.as_path(), "Downloaded fabric loader JSON".to_string()).expect("Failed to download fabric loader JSON")
+        util::download_text_async(&loader_json_url, json_path.as_path(), "Downloaded fabric loader JSON".to_string()).await.expect("Failed to download fabric loader JSON")
     } else {
         fs::read_to_string(json_path.as_path()).unwrap()
     };
@@ -98,7 +98,7 @@ pub fn down(loader: &FabricLoaderVersion, version: &FabricVersion, ver: PathBuf,
         let path = format!("{}{}", lib.url, path_from_maven);
         let lib_path = ver.join("libs").join(path_from_maven.clone());
         let _ = fs::create_dir_all(lib_path.clone().parent().unwrap());
-        let _ = util::download(path.as_str(), &lib_path, "Downloaded common lib jar".to_owned()).expect("");
+        let _ = util::download_async(path.as_str(), &lib_path, "Downloaded common lib jar".to_owned()).await.expect("Failed to download server lib jar");
     }
     println!("Downloaded common libs...");
     for lib in &parsed_json.libraries.server {
@@ -106,7 +106,7 @@ pub fn down(loader: &FabricLoaderVersion, version: &FabricVersion, ver: PathBuf,
         let path = format!("{}{}", lib.url, path_from_maven);
         let lib_path = ver.join("libs").join(path_from_maven.clone());
         let _ = fs::create_dir_all(lib_path.clone().parent().unwrap());
-        let _ = util::download(path.as_str(), &lib_path, "Downloaded server lib jar".to_owned()).expect("");
+        let _ = util::download_async(path.as_str(), &lib_path, "Downloaded server lib jar".to_owned()).await.expect("Failed ot download server lib jar");
     }
     println!("Downloaded server libs...");
     for lib in &parsed_json.libraries.client {
@@ -114,7 +114,7 @@ pub fn down(loader: &FabricLoaderVersion, version: &FabricVersion, ver: PathBuf,
         let path = format!("{}{}", lib.url, path_from_maven);
         let lib_path = ver.join("libs").join(path_from_maven.clone());
         let _ = fs::create_dir_all(lib_path.clone().parent().unwrap());
-        let _ = util::download(path.as_str(), &lib_path, "Downloaded client lib jar".to_owned()).expect("");
+        let _ = util::download_async(path.as_str(), &lib_path, "Downloaded client lib jar".to_owned()).await.expect("Failed to download client lib jar");
     }
     println!("Downloaded client libs...");
 
@@ -192,7 +192,7 @@ pub async fn handle(opt_version: Option<String>, opt_loader_version: Option<Stri
         UseQuilt::Yes(value) => value,
         UseQuilt::No => false,
     };
-    let game_versions = util::download_text_no_save(if is_quilt { QUILT_GAME_VERSIONS } else { FABRIC_GAME_VERSIONS }, "Downloaded fabric game versions json".to_string()).expect("Failed to download fabric game versions json");
+    let game_versions = util::download_text_no_save_async(if is_quilt { QUILT_GAME_VERSIONS } else { FABRIC_GAME_VERSIONS }, "Downloaded fabric game versions json".to_string()).await.expect("Failed to download fabric game versions json");
     let versions: Vec<FabricVersion> = serde_json::from_str(game_versions.as_str()).expect("Failed to parse fabric game versions JSON");
     let ver = if opt_version.is_some() {
         get_ver(versions, opt_version.unwrap())
@@ -200,7 +200,7 @@ pub async fn handle(opt_version: Option<String>, opt_loader_version: Option<Stri
         versions.first().unwrap().clone()
     };
 
-    let loader_versions_json = util::download_text_no_save(if is_quilt { QUILT_LOADER_VERSIONS } else { FABRIC_LOADER_VERSIONS }, "".to_string()).expect("Failed to download loader versions JSON");
+    let loader_versions_json = util::download_text_no_save_async(if is_quilt { QUILT_LOADER_VERSIONS } else { FABRIC_LOADER_VERSIONS }, "".to_string()).await.expect("Failed to download loader versions JSON");
     let loader_versions: Vec<FabricLoaderVersion> = serde_json::from_str(&loader_versions_json).expect("Failed to parse fabric loader versions JSON");
     let loader = if let Some(ver_str) = opt_loader_version {
         &loader_versions
@@ -233,7 +233,7 @@ pub async fn handle(opt_version: Option<String>, opt_loader_version: Option<Stri
     create_dirs(vers, ver_path.clone());
 
     vanilla::handle(Some(ver.version.clone()), limit.clone(), false, Some(ver_path.as_path())).await;
-    let parsed_json = down(loader, &ver, ver_path.clone(), use_quilt);
+    let parsed_json = down(loader, &ver, ver_path.clone(), use_quilt).await;
 
     launch(ver_path, parsed_json.mainClass.client);
 }
