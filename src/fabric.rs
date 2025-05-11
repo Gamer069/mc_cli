@@ -153,6 +153,9 @@ pub fn launch(ver_dir: PathBuf, main_class: String) {
     println!("{}", classpath);
 
     let mut cmd: Vec<String> = vec![];
+    if cfg!(target_os = "macos") {
+        cmd.push("-XstartOnFirstThread".to_owned());
+    }
     cmd.push("-cp".to_owned());
     cmd.push(classpath);
     cmd.push(main_class);
