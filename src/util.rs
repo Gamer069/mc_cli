@@ -1,6 +1,7 @@
 use std::{error::Error, fs::{self, File}, io::{Read, Write}, path::{Path, PathBuf}};
 use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::blocking::Client;
+use futures_util::StreamExt as _;
 
 pub fn download_text(url: &str, out: &Path, msg: String) -> Result<String, Box<dyn Error>> {
     let client = Client::new();
@@ -31,6 +32,32 @@ pub fn download_text(url: &str, out: &Path, msg: String) -> Result<String, Box<d
     Ok(String::from_utf8(downloaded)?) // now return the full text
 }
 
+pub async fn download_text_async(url: &str, out: &Path, msg: String) -> Result<String, Box<dyn Error>> {
+    let client = reqwest::Client::new();
+    let resp = client.get(url).send().await?;
+
+    let total = resp.content_length().unwrap_or(0);
+    let pb = ProgressBar::new(total);
+    pb.set_style(ProgressStyle::default_bar()
+        .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta}) {msg}")
+        .unwrap()
+        .progress_chars("#>-"));
+
+    let mut f = File::create(out)?;
+    let mut stream = resp.bytes_stream();
+    let mut data: Vec<u8> = vec![];
+
+    while let Some(Ok(item)) = stream.next().await {
+        f.write_all(&item)?;
+        data.extend(&item);
+
+        pb.inc(item.len() as u64);
+    }
+    pb.finish_with_message(msg);
+    
+    Ok(String::from_utf8(data)?) // now return the full text
+}
+
 pub fn download_text_no_save(url: &str, msg: String) -> Result<String, Box<dyn Error>> {
     let client = Client::new();
     let mut resp = client.get(url).send()?;
@@ -56,6 +83,30 @@ pub fn download_text_no_save(url: &str, msg: String) -> Result<String, Box<dyn E
     pb.finish_with_message(msg);
 
     Ok(String::from_utf8(downloaded)?) // now return the full text
+}
+
+pub async fn download_text_no_save_async(url: &str, msg: String) -> Result<String, Box<dyn Error>> {
+    let client = reqwest::Client::new();
+    let resp = client.get(url).send().await?;
+
+    let total = resp.content_length().unwrap_or(0);
+    let pb = ProgressBar::new(total);
+    pb.set_style(ProgressStyle::default_bar()
+        .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta}) {msg}")
+        .unwrap()
+        .progress_chars("#>-"));
+
+    let mut stream = resp.bytes_stream();
+    let mut data: Vec<u8> = vec![];
+
+    while let Some(Ok(item)) = stream.next().await {
+        data.extend(&item);
+
+        pb.inc(item.len() as u64);
+    }
+    pb.finish_with_message(msg);
+
+    Ok(String::from_utf8(data)?) // now return the full text
 }
 
 pub fn download(url: &str, out: &Path, msg: String) -> Result<Vec<u8>, Box<dyn Error>> {
@@ -87,6 +138,33 @@ pub fn download(url: &str, out: &Path, msg: String) -> Result<Vec<u8>, Box<dyn E
     Ok(downloaded)
 }
 
+pub async fn download_async(url: &str, out: &Path, msg: String) -> Result<Vec<u8>, Box<dyn Error>> {
+    let client = reqwest::Client::new();
+    let resp = client.get(url).send().await?;
+
+    let total = resp.content_length().unwrap_or(0);
+    let pb = ProgressBar::new(total);
+    pb.set_style(ProgressStyle::default_bar()
+        .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta}) {msg}")
+        .unwrap()
+        .progress_chars("#>-"));
+
+    let mut f = File::create(out)?;
+    let mut data: Vec<u8> = vec![];
+    let mut stream = resp.bytes_stream();
+
+    while let Some(Ok(item)) = stream.next().await {
+        data.extend(&item);
+        f.write_all(&item)?;
+
+        pb.inc(item.len() as u64);
+    }
+    pb.finish_with_message(msg);
+
+    Ok(data)
+}
+
+
 pub fn download_no_save(url: &str, msg: String) -> Result<Vec<u8>, Box<dyn Error>> {
     let client = Client::new();
     let mut resp = client.get(url).send()?;
@@ -112,6 +190,30 @@ pub fn download_no_save(url: &str, msg: String) -> Result<Vec<u8>, Box<dyn Error
     pb.finish_with_message(msg);
 
     Ok(downloaded)
+}
+
+pub async fn download_no_save_async(url: &str, msg: String) -> Result<Vec<u8>, Box<dyn Error>> {
+    let client = reqwest::Client::new();
+    let resp = client.get(url).send().await?;
+
+    let total = resp.content_length().unwrap_or(0);
+    let pb = ProgressBar::new(total);
+    pb.set_style(ProgressStyle::default_bar()
+        .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta}) {msg}")
+        .unwrap()
+        .progress_chars("#>-"));
+
+    let mut stream = resp.bytes_stream();
+    let mut data: Vec<u8> = vec![];
+
+    while let Some(Ok(item)) = stream.next().await {
+        data.extend(&item);
+
+        pb.inc(item.len() as u64);
+    }
+    pb.finish_with_message(msg);
+
+    Ok(data)
 }
 
 pub fn list_files_recursively(dir: &Path) -> Vec<PathBuf> {

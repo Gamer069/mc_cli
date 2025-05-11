@@ -20,8 +20,7 @@ pub fn can_use(mem: String) -> bool {
         _ => unreachable!(),
     };
 
-    // Return the value in bytes (convert from the number with the appropriate multiplier)
-    ((number * multiplier as f64) as u64) < sys_info::mem_info().unwrap().free
+    ((number * multiplier as f64) as u64) < (sys_info::mem_info().unwrap().free as u64) * 1024
 }
 pub fn check_if_valid(limit: String) {
     if !is_valid(limit.clone()) {

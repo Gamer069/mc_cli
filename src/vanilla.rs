@@ -1,7 +1,7 @@
-use std::{borrow, clone, collections::HashMap, fs, io::{BufRead, BufReader}, path::{Path, PathBuf}, process::{Command, Stdio}};
+use std::{collections::HashMap, fs, io::{BufRead, BufReader}, path::{Path, PathBuf}, process::{Command, Stdio}};
 
 use directories::ProjectDirs;
-use jars::{Jar, JarOptionBuilder};
+use jars::JarOptionBuilder;
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -45,11 +45,10 @@ pub fn get_ver_json_url(manifest: VanillaManifest, version: String) -> String {
     url
 }
 
-pub fn get_manifest() -> VanillaManifest {
-    let manifest_txt = util::download_text_no_save(VANILLA_MANIFEST, "Downloaded vanilla manifest".to_owned()).expect("Failed to download vanilla manifest to RAM");
+pub async fn get_manifest() -> VanillaManifest {
+    let manifest_txt = util::download_text_no_save_async(VANILLA_MANIFEST, "Downloaded vanilla manifest".to_owned()).await.expect("Failed to download vanilla manifest to RAM");
     serde_json::from_str(&manifest_txt).unwrap()
 }
-
 
 pub fn launch(json: VersionJson, version_dir: PathBuf, limit: String) {
     let game_dir = version_dir
@@ -221,10 +220,10 @@ pub fn create_dirs(vers: PathBuf, ver: PathBuf) {
     let _ = fs::create_dir(vers.parent().unwrap().join("assets"));
 }
 
-pub fn handle(opt_version: Option<String>, limit: String, b_launch: bool, version_dir: Option<&Path>) {
+pub async fn handle(opt_version: Option<String>, limit: String, b_launch: bool, version_dir: Option<&Path>) {
     mem::check_if_valid(limit.clone());
 
-    let manifest = get_manifest();
+    let manifest = get_manifest().await;
     let version = opt_version.unwrap_or(manifest.latest.snapshot.clone());
 
     let proj_dirs = ProjectDirs::from("me", "illia", "mc_cli").unwrap();
@@ -262,7 +261,7 @@ pub fn handle(opt_version: Option<String>, limit: String, b_launch: bool, versio
 
     let ver_url = get_ver_json_url(manifest, version.clone());
 
-    let text = util::download_text(ver_url.as_str(), ver.join("version.json").as_path(), "Downloaded version.json".to_owned()).expect("Failed to download version json");
+    let text = util::download_text_async(ver_url.as_str(), ver.join("version.json").as_path(), "Downloaded version.json".to_owned()).await.expect("Failed to download version json");
 
     let mut version_json_err = serde_json::Deserializer::from_str(text.as_str());
     let version_json_res = serde_path_to_error::deserialize::<_, VersionJson>(&mut version_json_err);
@@ -273,65 +272,92 @@ pub fn handle(opt_version: Option<String>, limit: String, b_launch: bool, versio
 
     // download minecraft jar
     let client_url = version_json.downloads.client.url.clone();
-    let _ = util::download(client_url.as_str(), ver.join("client.jar").as_path(), "Downloaded client jar".to_owned()).expect("Failed to download client jar");
+    let _ = util::download_async(client_url.as_str(), ver.join("client.jar").as_path(), "Downloaded client jar".to_owned()).await.expect("Failed to download client jar");
+
+    let mut download_tasks = Vec::new();
 
     for lib in &version_json.libraries {
-        if let Some(rules) = &lib.rules {
-            for rule in rules {
-                if let Some(artifact) = &lib.downloads.artifact {
-                    let matches_rule = rules::matches_os_rule(rule);
-                    if matches_rule {
-                        let path = Path::new(&artifact.path);
-                        let _ = fs::create_dir_all(libs.join(path.parent().unwrap()));
-                        let _ = util::download(artifact.url.as_str(), &libs.as_path().join(path), "Downloaded lib".to_owned()).expect("Failed to download library");
-                    }
-                }
-            }
+        let should_download = if let Some(rules) = &lib.rules {
+            rules.iter().any(rules::matches_os_rule)
         } else {
-            if let Some(artifact) = &lib.downloads.artifact {
-                let path = Path::new(&artifact.path);
-                let _ = fs::create_dir_all(libs.join(path.parent().unwrap()));
-                let _ = util::download(artifact.url.as_str(), &libs.as_path().join(path), "Downloaded lib".to_owned()).expect("Failed to download library");
-            }
+            true
+        };
+
+        if should_download && lib.downloads.artifact.is_some() {
+            let artifact = lib.downloads.artifact.as_ref().unwrap();
+            let path = Path::new(&artifact.path);
+            let dir_path = libs.join(path.parent().unwrap());
+            let download_path = libs.join(path);
+            let url = artifact.url.clone();
+
+            tokio::fs::create_dir_all(&dir_path).await.unwrap_or_default();
+
+            download_tasks.push(tokio::spawn(async move {
+                util::download_async(
+                    &url, 
+                    &download_path, 
+                    "Downloaded lib".to_owned()
+                ).await.expect("Failed to download library")
+            }));
         }
+
         if let Some(classifiers) = &lib.downloads.classifiers {
             let needed = rules::classifiers_needed(classifiers);
 
-            println!("asdf needed: {:?}", &needed);
+            for needed_classifier in needed {
+                let path = Path::new(&needed_classifier.path);
+                let dir_path = libs.join(path.parent().unwrap());
+                let download_path = libs.join(path);
+                let url = needed_classifier.url.clone();
+                let libs_clone = libs.to_path_buf();
+                let extract = lib.extract.clone();
 
-            for needed in needed {
-                println!("asdf url: {}", &needed.url);
-                let url = &needed.url;
-                let path = Path::new(&needed.path);
-                let _ = fs::create_dir_all(libs.join(path.parent().unwrap()));
-                let _ = util::download(needed.url.as_str(), &libs.as_path().join(path), "Downloaded classifier lib".to_owned()).expect("Failed to download classifier lib");
-                if let Some(extract) = &lib.extract {
-                    let excluded = extract.clone().exclude;
-                    let option = JarOptionBuilder::builder().target(libs.to_str().unwrap()).build();
-                    let lib = libs.as_path().join(path);
-                    println!("lib: {:#?}", lib);
-                    let jar = jars::jar(lib, option).expect("Failed to extract library jar file");
-                    for file in jar.files {
-                        let dir = if Path::new(&file.0).is_dir() {
-                            Path::new(&file.0)
-                        } else {
-                            Path::new(&file.0).parent().unwrap()
-                        };
-                        fs::create_dir_all(libs.join(dir)).expect("Failed to create_dir_all before extracting library file");
-                        fs::write(libs.join(file.0.clone()), file.1).expect(&format!("Failed to write extracted library file {}", file.0));
+                tokio::fs::create_dir_all(&dir_path).await.unwrap_or_default();
+
+                download_tasks.push(tokio::spawn(async move {
+                    let classifier_lib = util::download_async(
+                        &url,
+                        &download_path,
+                        "Downloaded classifier lib".to_owned()
+                    ).await.expect("Failed to download classifier lib");
+
+                    if let Some(extract_info) = extract {
+                        let option = JarOptionBuilder::builder().target(libs_clone.to_str().unwrap()).build();
+                        println!("lib: {:#?}", download_path);
+                        let jar = jars::jar(download_path, option).expect("Failed to extract library jar file");
+
+                        for (file_path, content) in jar.files {
+                            let dir = if Path::new(&file_path).is_dir() {
+                                Path::new(&file_path)
+                            } else {
+                                Path::new(&file_path).parent().unwrap()
+                            };
+
+                            tokio::fs::create_dir_all(libs_clone.join(dir)).await
+                                .expect("Failed to create directory for extracted file");
+
+                            tokio::fs::write(libs_clone.join(&file_path), content).await
+                                .expect(&format!("Failed to write extracted file {}", file_path));
+                            }
+
+                        for excluded in extract_info.exclude {
+                            let _ = tokio::fs::remove_file(excluded).await;
+                        }
                     }
-                    for excluded in excluded {
-                        let _ = fs::remove_file(excluded); // don't care if it errors or not
-                    }
-                }
+                    classifier_lib
+                }));
             }
         }
     }
+
+    // Wait for all downloads to complete
+    futures_util::future::join_all(download_tasks).await;
+
     let assets_dir = data_dir.join("assets");
     let _ = fs::create_dir(assets_dir.join("indexes"));
 
     let asset_index_url = version_json.assetIndex.url.clone();
-    let asset_index = util::download_text(&asset_index_url, &assets_dir.join("indexes").join(format!("{}.json", version)), "Downloaded asset index".to_owned()).expect("Failed to download asset index json");
+    let asset_index = util::download_text_async(&asset_index_url, &assets_dir.join("indexes").join(format!("{}.json", version)), "Downloaded asset index".to_owned()).await.expect("Failed to download asset index json");
 
     let asset_index_json: AssetIndexJson = serde_json::from_str(&asset_index).expect("Failed to parse asset index json");
     let assets = asset_index_json.objects;
@@ -341,7 +367,7 @@ pub fn handle(opt_version: Option<String>, limit: String, b_launch: bool, versio
         let dir = &hash[..2];
         let dir_full = assets_dir.join("objects").join(dir);
         let _ = fs::create_dir_all(&dir_full);
-        util::download(&format!("https://resources.download.minecraft.net/{}/{}", dir, hash).to_string(), &dir_full.join(hash), "Downloaded resources".to_owned()).expect(format!("Failed to download resource {}", hash).as_str());
+        util::download_async(&format!("https://resources.download.minecraft.net/{}/{}", dir, hash).to_string(), &dir_full.join(hash), "Downloaded resource".to_owned()).await.expect(format!("Failed to download resource {}", hash).as_str());
     }
 
     if b_launch {

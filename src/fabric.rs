@@ -186,7 +186,7 @@ pub fn launch(ver_dir: PathBuf, main_class: String) {
     println!("Exited with {}", status);
 }
 
-pub fn handle(opt_version: Option<String>, opt_loader_version: Option<String>, limit: String, use_quilt: UseQuilt) {
+pub async fn handle(opt_version: Option<String>, opt_loader_version: Option<String>, limit: String, use_quilt: UseQuilt) {
     let is_quilt = matches!(use_quilt, UseQuilt::Yes(_));
     let use_release = match use_quilt {
         UseQuilt::Yes(value) => value,
@@ -232,7 +232,7 @@ pub fn handle(opt_version: Option<String>, opt_loader_version: Option<String>, l
 
     create_dirs(vers, ver_path.clone());
 
-    vanilla::handle(Some(ver.version.clone()), limit.clone(), false, Some(ver_path.as_path()));
+    vanilla::handle(Some(ver.version.clone()), limit.clone(), false, Some(ver_path.as_path())).await;
     let parsed_json = down(loader, &ver, ver_path.clone(), use_quilt);
 
     launch(ver_path, parsed_json.mainClass.client);
