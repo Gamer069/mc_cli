@@ -1,13 +1,15 @@
-use std::{collections::HashMap, fs, io::{BufRead, BufReader}, path::{Path, PathBuf}, process::{Command, Stdio}};
+use std::{collections::HashMap, fs, io::{BufRead, BufReader}, path::{Path, PathBuf}, process::{Command, Stdio}, sync::Arc};
 
 use directories::ProjectDirs;
 use jars::JarOptionBuilder;
 use serde::Deserialize;
+use tokio::sync::Semaphore;
 use uuid::Uuid;
 
 use crate::{assets::AssetIndexJson, mem, rules, util, version::{self, VersionJson}};
 
 const VANILLA_MANIFEST: &'static str = "https://launchermeta.mojang.com/mc/game/version_manifest.json";
+const MAX_CONCURRENT_DOWNLOADS: i32 = 8;
 
 #[derive(Deserialize, Debug)]
 pub struct VanillaVersion {
@@ -273,6 +275,7 @@ pub async fn handle(opt_version: Option<String>, limit: String, b_launch: bool, 
     // download minecraft jar
     let client_url = version_json.downloads.client.url.clone();
     let _ = util::download_async(client_url.as_str(), ver.join("client.jar").as_path(), "Downloaded client jar".to_owned()).await.expect("Failed to download client jar");
+    let lib_semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_DOWNLOADS as usize));
 
     let mut download_tasks = Vec::new();
 
@@ -289,10 +292,13 @@ pub async fn handle(opt_version: Option<String>, limit: String, b_launch: bool, 
             let dir_path = libs.join(path.parent().unwrap());
             let download_path = libs.join(path);
             let url = artifact.url.clone();
+            let sem = Arc::clone(&lib_semaphore);
 
             tokio::fs::create_dir_all(&dir_path).await.unwrap_or_default();
 
             download_tasks.push(tokio::spawn(async move {
+                let _permit = sem.acquire().await.unwrap();
+
                 util::download_async(
                     &url, 
                     &download_path, 
@@ -362,13 +368,44 @@ pub async fn handle(opt_version: Option<String>, limit: String, b_launch: bool, 
     let asset_index_json: AssetIndexJson = serde_json::from_str(&asset_index).expect("Failed to parse asset index json");
     let assets = asset_index_json.objects;
 
-    for asset in assets.iter() {
-        let hash = &asset.1.hash;
-        let dir = &hash[..2];
-        let dir_full = assets_dir.join("objects").join(dir);
-        let _ = fs::create_dir_all(&dir_full);
-        util::download_async(&format!("https://resources.download.minecraft.net/{}/{}", dir, hash).to_string(), &dir_full.join(hash), "Downloaded resource".to_owned()).await.expect(format!("Failed to download resource {}", hash).as_str());
-    }
+    let semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_DOWNLOADS as usize));
+
+    let download_futures = assets.iter().map(|asset| {
+        let hash = asset.1.hash.clone();
+        let assets_dir = assets_dir.clone();
+        let sem = Arc::clone(&semaphore);
+
+        async move {
+            let _permit = sem.acquire().await.unwrap();
+
+            let dir = &hash[..2];
+            let dir_full = assets_dir.join("objects").join(dir);
+            let _ = fs::create_dir_all(&dir_full);
+
+            let url = format!("https://resources.download.minecraft.net/{}/{}", dir, hash);
+            let destination = dir_full.join(&hash);
+
+            match tokio::time::timeout(
+                tokio::time::Duration::from_secs(60),
+                util::download_async(&url, &destination, "Downloaded resource".to_owned())
+            ).await {
+                Ok(Ok(_)) => {
+                    println!("Successfully downloaded resource {}", hash);
+                    Ok(hash)
+                },
+                Ok(Err(e)) => {
+                    eprintln!("Failed to download resource {}: {}", hash, e);
+                    Err(format!("Download error: {}", e))
+                },
+                Err(_) => {
+                    eprintln!("Download timed out for resource {}", hash);
+                    Err(format!("Download timeout: {}", hash))
+                }
+            }
+        }
+    }).collect::<Vec<_>>();
+
+    futures_util::future::join_all(download_futures).await;
 
     if b_launch {
         launch(version_json, ver.to_path_buf(), limit.clone());
