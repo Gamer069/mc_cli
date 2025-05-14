@@ -88,11 +88,6 @@ pub struct Library {
 pub struct FabricLib {
     pub name: String,
     pub url: String,
-    pub md5: String,
-    pub sha1: String,
-    pub sha256: String,
-    pub sha512: String,
-    pub size: i32,
 }
 
 #[derive(Deserialize, Debug)]

@@ -54,7 +54,8 @@ pub async fn down_intermediary(loader: &FabricLoaderVersion, version: &FabricVer
     });
 
     let maven_path = version::maven_to_path(intermediary.maven.clone());
-    let maven_path_with_domain = format!("{}/{}", if is_quilt { format!("{}{}", QUILT_MAVEN, use_release) } else { FABRIC_MAVEN.to_string() }, maven_path);
+    let maven_path_with_domain = format!("{}{}", FABRIC_MAVEN.to_string(), maven_path);
+    dbg!(&maven_path_with_domain);
     let _ = util::download_async(maven_path_with_domain.as_str(), ver.join("inter.jar").as_ref(), "Downloaded intermediary...".to_string()).await.expect("Failed to download intermediary");
 }
 
@@ -71,7 +72,6 @@ pub async fn down(loader: &FabricLoaderVersion, version: &FabricVersion, ver: Pa
 
     down_intermediary(loader, version, ver.clone(), use_quilt).await;
     let loader_jar_url = format!("{}{}{}", if is_quilt { QUILT_MAVEN } else { FABRIC_MAVEN }, use_release, loader.jar_path(is_quilt));
-    println!("downloading loader jar from {}", loader_jar_url);
 
     let jar_path = ver.join("fabric.jar");
 
@@ -80,7 +80,7 @@ pub async fn down(loader: &FabricLoaderVersion, version: &FabricVersion, ver: Pa
     }
 
     let loader_json_url = format!("{}{}{}", if is_quilt { QUILT_MAVEN } else { FABRIC_MAVEN }, use_release, loader.json_path(is_quilt));
-    println!("Downloading loader JSON from {}", loader_json_url);
+
 
     let json_path = ver.join("fabric.json");
 
@@ -91,7 +91,6 @@ pub async fn down(loader: &FabricLoaderVersion, version: &FabricVersion, ver: Pa
     };
 
     let parsed_json: FabricLoaderJSON = serde_json::from_str(&loader_json).expect("Failed to parse loader JSON");
-    println!("{:#?}", parsed_json);
 
     for lib in &parsed_json.libraries.common {
         let path_from_maven = version::maven_to_path(lib.name.clone());
@@ -150,8 +149,6 @@ pub fn launch(ver_dir: PathBuf, main_class: String) {
     classpath.push(sep);
     classpath.push_str(ver_dir.join("fabric.jar").to_str().unwrap());
 
-    println!("{}", classpath);
-
     let mut cmd: Vec<String> = vec![];
     if cfg!(target_os = "macos") {
         cmd.push("-XstartOnFirstThread".to_owned());
@@ -171,8 +168,6 @@ pub fn launch(ver_dir: PathBuf, main_class: String) {
     cmd.push(ver);
     cmd.push("--uuid".to_string());
     cmd.push(Uuid::new_v4().to_string());
-
-    println!("{:#?}", cmd);
 
     let mut process = Command::new("java")
         .current_dir(game_dir)
