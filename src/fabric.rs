@@ -36,8 +36,8 @@ pub fn get_ver(versions: Vec<FabricVersion>, version: String) -> FabricVersion {
 pub async fn down_intermediary(loader: &FabricLoaderVersion, version: &FabricVersion, ver: PathBuf, use_quilt: UseQuilt) {
     let is_quilt = matches!(use_quilt, UseQuilt::Yes(_));
     let use_release = match use_quilt {
-        UseQuilt::Yes(value) => value,
-        UseQuilt::No => false,
+        UseQuilt::Yes(value) => if value { "repository/release/" } else { "repository/snapshot/" },
+        UseQuilt::No => "",
     };
     let intermediary_versions_text = util::download_text_no_save_async(if is_quilt { QUILT_INTERMEDIARY_VERSIONS } else { FABRIC_INTERMEDIARY_VERSIONS }, "Downloaded intermediary version JSON".to_string()).await.expect("Failed to download intermediary version JSON");
     let intermediaries: Vec<FabricIntermediaryVersion> = serde_json::from_str(intermediary_versions_text.as_str()).expect("Failed to deserialize intermediary version JSON");
@@ -54,7 +54,7 @@ pub async fn down_intermediary(loader: &FabricLoaderVersion, version: &FabricVer
     });
 
     let maven_path = version::maven_to_path(intermediary.maven.clone());
-    let maven_path_with_domain = format!("{}/{}", if is_quilt { format!("{}{}", QUILT_MAVEN, if use_release { "/release" } else { "/snapshot" }) } else { FABRIC_MAVEN.to_string() }, maven_path);
+    let maven_path_with_domain = format!("{}/{}", if is_quilt { format!("{}{}", QUILT_MAVEN, use_release) } else { FABRIC_MAVEN.to_string() }, maven_path);
     let _ = util::download_async(maven_path_with_domain.as_str(), ver.join("inter.jar").as_ref(), "Downloaded intermediary...".to_string()).await.expect("Failed to download intermediary");
 }
 
@@ -65,12 +65,12 @@ pub async fn down_intermediary(loader: &FabricLoaderVersion, version: &FabricVer
 pub async fn down(loader: &FabricLoaderVersion, version: &FabricVersion, ver: PathBuf, use_quilt: UseQuilt) -> FabricLoaderJSON {
     let is_quilt = matches!(use_quilt, UseQuilt::Yes(_));
     let use_release = match use_quilt {
-        UseQuilt::Yes(value) => value,
-        UseQuilt::No => false,
+        UseQuilt::Yes(value) => if value { "repository/release/" } else { "repository/snapshot/" },
+        UseQuilt::No => "",
     };
 
     down_intermediary(loader, version, ver.clone(), use_quilt).await;
-    let loader_jar_url = format!("{}{}", if is_quilt { QUILT_MAVEN } else { FABRIC_MAVEN }, loader.jar_path());
+    let loader_jar_url = format!("{}{}{}", if is_quilt { QUILT_MAVEN } else { FABRIC_MAVEN }, use_release, loader.jar_path(is_quilt));
     println!("downloading loader jar from {}", loader_jar_url);
 
     let jar_path = ver.join("fabric.jar");
@@ -79,7 +79,7 @@ pub async fn down(loader: &FabricLoaderVersion, version: &FabricVersion, ver: Pa
         let _ = util::download_async(&loader_jar_url, jar_path.as_path(), "Downloaded fabric loader jar".to_string()).await.expect("Failed to download fabric JAR");
     }
 
-    let loader_json_url = format!("{}{}", if is_quilt { QUILT_MAVEN } else { FABRIC_MAVEN }, loader.json_path());
+    let loader_json_url = format!("{}{}{}", if is_quilt { QUILT_MAVEN } else { FABRIC_MAVEN }, use_release, loader.json_path(is_quilt));
     println!("Downloading loader JSON from {}", loader_json_url);
 
     let json_path = ver.join("fabric.json");
@@ -160,9 +160,12 @@ pub fn launch(ver_dir: PathBuf, main_class: String) {
     cmd.push(classpath);
     cmd.push(main_class);
     cmd.push("--gameDir".to_string());
-    cmd.push(ver_dir.parent().unwrap().to_str().unwrap().to_string());
+    let game_dir = dbg!(ver_dir.parent().unwrap().parent().unwrap().join("game").to_str().unwrap().to_owned());
+    cmd.push(game_dir.clone());
+
     cmd.push("--assetsDir".to_string());
-    cmd.push(ver_dir.parent().unwrap().join("assets").to_str().unwrap().to_string());
+    let assets_dir = dbg!(ver_dir.parent().unwrap().parent().unwrap().join("assets").to_str().unwrap().to_string());
+    cmd.push(assets_dir);
     cmd.push("--assetIndex".to_string());
     let ver = ver_dir.file_name().unwrap().to_str().unwrap().replace("fabric-", "").replace("quilt-", "");
     cmd.push(ver);
@@ -192,8 +195,8 @@ pub fn launch(ver_dir: PathBuf, main_class: String) {
 pub async fn handle(opt_version: Option<String>, opt_loader_version: Option<String>, limit: String, use_quilt: UseQuilt) {
     let is_quilt = matches!(use_quilt, UseQuilt::Yes(_));
     let use_release = match use_quilt {
-        UseQuilt::Yes(value) => value,
-        UseQuilt::No => false,
+        UseQuilt::Yes(value) => if value { "repository/release/" } else { "repository/snapshot/" },
+        UseQuilt::No => "",
     };
     let game_versions = util::download_text_no_save_async(if is_quilt { QUILT_GAME_VERSIONS } else { FABRIC_GAME_VERSIONS }, "Downloaded fabric game versions json".to_string()).await.expect("Failed to download fabric game versions json");
     let versions: Vec<FabricVersion> = serde_json::from_str(game_versions.as_str()).expect("Failed to parse fabric game versions JSON");

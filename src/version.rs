@@ -187,11 +187,11 @@ impl FabricLoaderVersion {
     pub fn replace(&self) -> String {
         format!("{}{}", self.maven.replace(&self.version, "").replace(self.separator.as_str(), "/").replace(".", "/").replace(":", "/"), self.version)
     }
-    pub fn jar_path(&self) -> String {
-        format!("{}/fabric-loader-{}.jar", self.replace(), self.version)
+    pub fn jar_path(&self, is_quilt: bool) -> String {
+        format!("{}/{}-loader-{}.jar", self.replace(), if is_quilt { "quilt" } else { "fabric" }, self.version)
     }
-    pub fn json_path(&self) -> String {
-        format!("{}/fabric-loader-{}.json", self.replace(), self.version)
+    pub fn json_path(&self, is_quilt: bool) -> String {
+        format!("{}/{}-loader-{}.json", self.replace(), if is_quilt { "quilt" } else { "fabric" }, self.version)
     }
 }
 
