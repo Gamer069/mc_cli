@@ -1,6 +1,6 @@
 use std::fs;
 use std::io::{BufRead as _, BufReader};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use directories::ProjectDirs;
@@ -240,6 +240,38 @@ pub async fn handle(opt_version: Option<String>, opt_loader_version: Option<Stri
 
     vanilla::handle(Some(ver.version.clone()), limit.clone(), false, Some(ver_path.as_path())).await;
     let parsed_json = down(loader, &ver, ver_path.clone(), use_quilt).await;
+
+    let _ = fs::remove_dir_all(ver_path.join("libs").join("META-INF"));
+
+    let asm = ver_path.join("libs").join("org").join("ow2").join("asm").join("asm");
+    let entries = fs::read_dir(&asm).expect("Failed to read lib dir").filter_map(|e| e.ok()).filter(|e| e.file_type().map(|ft| ft.is_dir()).unwrap_or(false));
+
+
+    let mut min_dir: Option<(f64, String)> = None;
+    let mut len = 0;
+    for entry in entries {
+        len += 1;
+        let name = entry.file_name().into_string().unwrap_or_default();
+        if let Ok(num) = name.parse::<f64>() {
+            match min_dir {
+                Some((min_val, _)) if num < min_val => {
+                    min_dir = Some((num, name));
+                }
+                None => {
+                    min_dir = Some((num, name));
+                }
+                _ => {}
+            }
+        }
+    }
+
+    if let Some((_, dir_name)) = min_dir {
+        if len > 1 {
+            let _ = fs::remove_dir_all(asm.join(Path::new(&dir_name)));
+        }
+    } else {
+        println!("No numeric-named directories found.");
+    }
 
     launch(ver_path, parsed_json.mainClass.client);
 }
