@@ -271,6 +271,13 @@ pub struct LiteLoaderSnapshots {
 pub struct LiteLoaderVersion {
     pub repo: LiteLoaderRepo,
     pub snapshots: Option<LiteLoaderSnapshots>,
+    pub artefacts: Option<LiteLoaderArtifact>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct LiteLoaderArtifact {
+    #[serde(rename = "com.mumfrey:liteloader")]
+    pub liteloader: HashMap<String, LiteLoaderTweaks>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
