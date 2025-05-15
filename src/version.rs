@@ -223,3 +223,58 @@ pub enum UseQuilt {
     Yes(bool),
     No
 }
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct LiteLoaderMeta {
+    pub description: String,
+    pub authors: String,
+    pub url: String,
+    pub updated: String,
+    pub updatedTime: u64,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct LiteLoaderRepo {
+    pub stream: String,
+    pub r#type: String,
+    pub url: String,
+    pub classifier: String,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct LiteLoaderTweaks {
+    pub tweakClass: String,
+    pub libraries: Vec<LiteLoaderLibrary>,
+    pub stream: String,
+    pub file: String,
+    pub version: String,
+    pub build: String,
+    pub md5: String,
+    pub timestamp: String,
+    pub lastSuccessfulBuild: i32,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct LiteLoaderLibrary {
+    pub name: String,
+    pub url: Option<String>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct LiteLoaderSnapshots {
+    pub libraries: Vec<LiteLoaderLibrary>,
+    #[serde(rename = "com.mumfrey:liteloader")]
+    pub liteloader: HashMap<String, LiteLoaderTweaks>, 
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct LiteLoaderVersion {
+    pub repo: LiteLoaderRepo,
+    pub snapshots: Option<LiteLoaderSnapshots>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct LiteLoaderVersions {
+    pub meta: LiteLoaderMeta,
+    pub versions: HashMap<String, LiteLoaderVersion>,
+}

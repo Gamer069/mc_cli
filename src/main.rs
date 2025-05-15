@@ -7,6 +7,7 @@ mod fabric;
 mod util;
 mod rules;
 mod assets;
+mod liteloader;
 
 use clap::Parser;
 use version::UseQuilt;
@@ -24,6 +25,10 @@ async fn main() {
         },
         app::Subcommand::Quilt { version, loader_version, mem, use_release } => {
             fabric::handle(version, loader_version, mem, UseQuilt::Yes(use_release)).await;
+        },
+        app::Subcommand::Liteloader { version, loader_version, mem } => {
+            eprintln!("Liteloader isn't implemented yet. Please consider using fabric,quilt,or just running vanilla");
+            liteloader::handle(version, loader_version, mem).await;
         },
     }
 }

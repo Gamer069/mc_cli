@@ -32,5 +32,13 @@ pub enum Subcommand {
         mem: String,
         #[clap(short, long, default_value = "false")]
         use_release: bool,
-    }
+    },
+    Liteloader {
+        #[clap(short, long)]
+        version: Option<String>,
+        #[clap(short, long)]
+        loader_version: Option<String>,
+        #[clap(short, long, default_value = "10G")]
+        mem: String,
+    },
 }
