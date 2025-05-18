@@ -275,13 +275,44 @@ pub struct LiteLoaderVersion {
 }
 
 #[derive(Deserialize, Debug, Clone)]
+pub struct LiteLoaderArtifacts {
+    pub tweakClass: String,
+    pub libraries: Vec<LiteLoaderLibrary>,
+    pub stream: String,
+    pub file: String,
+    pub version: String,
+    pub md5: String,
+    pub timestamp: String,
+}
+
+#[derive(Deserialize, Debug, Clone)]
 pub struct LiteLoaderArtifact {
     #[serde(rename = "com.mumfrey:liteloader")]
-    pub liteloader: HashMap<String, LiteLoaderTweaks>,
+    pub liteloader: HashMap<String, LiteLoaderArtifacts>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct LiteLoaderVersions {
     pub meta: LiteLoaderMeta,
     pub versions: HashMap<String, LiteLoaderVersion>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct MavenMetadataVersioning {
+    pub snapshot: MavenMetadataSnapshot,
+    pub lastUpdated: String,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct MavenMetadataSnapshot {
+    pub timestamp: String,
+    pub buildNumber: i32,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct MavenMetadataRoot {
+    pub groupId: String,
+    pub artifactId: String,
+    pub version: String,
+    pub versioning: MavenMetadataVersioning,
 }

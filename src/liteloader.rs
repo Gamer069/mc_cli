@@ -1,6 +1,8 @@
-use std::fs;
+use std::{fs, path::PathBuf};
 
-use crate::{util, version::LiteLoaderVersions};
+use directories::ProjectDirs;
+
+use crate::{util, vanilla, version::{LiteLoaderVersions, MavenMetadataRoot}};
 
 const LITELOADER_VERSIONS_JSON: &'static str = "https://dl.liteloader.com/versions/versions.json";
 
@@ -8,6 +10,7 @@ pub async fn handle(opt_version: Option<String>, opt_loader_version: Option<Stri
     let versions_json_text = util::download_text_no_save_async(LITELOADER_VERSIONS_JSON, "Downloaded liteloader versions json".to_owned()).await.expect("Failed to download liteloader versions json");
     tokio::fs::write("ver.json", versions_json_text.to_string()).await.unwrap();
     let versions_json: LiteLoaderVersions = serde_json::from_str(&versions_json_text).expect("Failed to parse liteloader versions");
+    let meta = versions_json.meta;
     let versions = versions_json.versions;
     let mut version = String::new();
     if opt_version.is_some() {
@@ -25,7 +28,36 @@ pub async fn handle(opt_version: Option<String>, opt_loader_version: Option<Stri
         }
         version = format!("1.{}", max);
     }
-    println!("{}", version);
-    if versions[&version].artefacts.is_some() {
+
+    let proj_dirs = ProjectDirs::from("me", "illia", "mc_cli").unwrap();
+    let data_dir = proj_dirs.data_dir();
+    let vers = data_dir.join("vers");
+    let ver_path = vers.join(format!("{}-{}", "liteloader", version));
+    create_dirs(vers, ver_path.clone());
+
+    if let Some(lite_loader_artifact) = &versions[&version].artefacts {
+        println!("{:?}", versions[&version].artefacts);
+    } else if let Some(snap) = &versions[&version].snapshots {
+        let repo = &versions[&version].repo;
+        let liteloader_path = &format!("{}com/mumfrey/liteloader/{}", &repo.url, snap.liteloader["latest"].version);
+        let metadata = util::download_text_no_save_async(&format!("{}/maven-metadata.xml", liteloader_path), "Downloaded metadata".to_owned()).await.expect("Failed to download metadata");
+        let xmled_meta: MavenMetadataRoot = serde_xml_rs::from_str(&metadata).unwrap();
+
+        let ll_jar_path = ver_path.join("ll.jar");
+        let ll_path = format!("{}/liteloader-{}-{}-{}.jar", &liteloader_path, &version, xmled_meta.versioning.snapshot.timestamp, xmled_meta.versioning.snapshot.buildNumber);
+
+        println!("{}", ll_path);
+
+        let ll = util::download_async(ll_path.as_str(), &ll_jar_path.as_path(), "Downloaded ll jar".to_string()).await.expect("Failed to download ll jar");
     }
+
+    vanilla::handle(Some(version), limit.clone(), false, Some(ver_path.as_path())).await;
+}
+
+pub fn create_dirs(vers: PathBuf, ver: PathBuf) {
+    let _ = fs::create_dir_all(vers.clone());
+    let _ = fs::create_dir(ver.clone());
+    let _ = fs::create_dir(vers.parent().unwrap().join("game"));
+    let _ = fs::create_dir(ver.join("libs"));
+    let _ = fs::create_dir(vers.parent().unwrap().join("assets"));
 }
