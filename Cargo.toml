@@ -5,11 +5,13 @@ edition = "2024"
 
 [dependencies]
 clap = { version = "4.5.37", features = ["derive"] }
+cli-table = "0.5.0"
 directories = "6.0.0"
 futures-util = "0.3.31"
 indicatif = "0.17.11"
 jars = "0.1.1"
 oauth2-microsoft = "0.2.0"
+open = "5.3.2"
 regex = "1.11.1"
 reqwest = { version = "0.12.15", features = ["blocking", "stream"] }
 serde = { version = "*", features = ["derive"] }

@@ -304,12 +304,14 @@ pub struct MavenMetadataVersioning {
 }
 
 #[derive(Deserialize, Debug, Clone)]
+#[allow(non_snake_case)]
 pub struct MavenMetadataSnapshot {
     pub timestamp: String,
     pub buildNumber: i32,
 }
 
 #[derive(Deserialize, Debug, Clone)]
+#[allow(non_snake_case)]
 pub struct MavenMetadataRoot {
     pub groupId: String,
     pub artifactId: String,

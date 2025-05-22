@@ -41,4 +41,33 @@ pub enum Subcommand {
         #[clap(short, long, default_value = "10G")]
         mem: String,
     },
+    #[command(about = "List versions")]
+    Versions,
+    #[command(about = "Open directories or files with the preferred application")]
+    Open {
+        #[command(subcommand)]
+        target: OpenTarget,
+    },
+}
+
+#[derive(clap::Subcommand, Debug)]
+pub enum OpenTarget {
+    #[command(about = "Opens the game directory")]
+    Game,
+    #[command(about = "Opens the mods directory")]
+    Mods,
+    #[command(about = "Opens the resource packs directory")]
+    ResourcePacks,
+    #[command(about = "Opens the logs directory")]
+    Logs,
+    #[command(about = "Opens the saves directory")]
+    Saves,
+    #[command(about = "Opens the downloads directory")]
+    Downloads,
+    #[command(about = "Opens the data directory")]
+    Data,
+    #[command(about = "Opens the config directory")]
+    Config,
+    #[command(about = "Opens options.txt")]
+    McOptions,
 }
